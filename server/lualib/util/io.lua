@@ -8,10 +8,12 @@ local function pcall_flines(f, ... ) return pcall(f:lines( ... )) end
 
 --遍历path下所有以ext后缀的文件
 function io.loopfile(path, fun, ext)
-    local f = assert_popen("ls " .. path .. "*" .. ext)
-    local fname
-    while fname = f:read("l") do
-        fun(fname)
+    ext = ext and ("*" .. ext) or ""
+    local f = assert_popen("ls " .. path .. ext)
+    local fname = f:read("l")
+    while fname do
+        fun(string.match(fname, "%g+"))
+        fname = f:read("l")
     end
     io.close(f)
 end
@@ -30,26 +32,8 @@ function io.writefile(path, ...)
     io.close(f)
 end
 
-function io.pathinfo(path)
-    local pos = string.len(path)
-    local extpos = pos + 1
-    while pos > 0 do
-        local b = string.byte(path, pos)
-        if b == 46 then -- 46 = char "."
-            extpos = pos
-        elseif b == 47 then -- 47 = char "/"
-            break
-        end
-        pos = pos - 1
-    end
-
-    local ret = {}
-    ret.dir = string.sub(path, 1, pos)
-    ret.file = string.sub(path, pos + 1)
-    extpos = extpos - pos
-    ret.base = string.sub(ret.file, 1, extpos - 1)
-    ret.ext = string.sub(ret.file, extpos)
-    return ret
+function io.getfilename(path)
+    return string.match(path, "([^/^%.]+)%.(%w+)$")
 end
 
 function io.filesize(path)

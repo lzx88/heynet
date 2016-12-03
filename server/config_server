@@ -5,7 +5,7 @@ server_idx = 0
 --agent池默认值
 agent_pool_init = 2
 
-config_path = root .. "game-config/"
+config_path = root .. "game-config/*.cfg"
 proto_path = root .. "game-proto/"
 
 gate_port = server_idx .. 5678 

@@ -9,11 +9,11 @@ local var = {
 }
 
 function message.register(name)
-	local f = assert(io.open(name .. ".s2c.sproto"))
+	local f = assert(io.open(name .. ".s2c"))
 	local t = f:read "a"
 	f:close()
 	var.host = sproto.parse(t):host "package"
-	local f = assert(io.open(name .. ".c2s.sproto"))
+	local f = assert(io.open(name .. ".c2s"))
 	local t = f:read "a"
 	f:close()
 	var.request = var.host:attach(sproto.parse(t))

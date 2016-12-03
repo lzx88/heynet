@@ -41,6 +41,7 @@ function auth.shakehand(fd)
 end
 
 local function init()
+	client.proto()
 	client.init(handler)
 end
 

@@ -1,7 +1,6 @@
 local skynet = require "skynet"
 local game = require "game"
 local redis = require "redis"
-local log = require "log"
 local moduled = require "moduled"
 
 local conf

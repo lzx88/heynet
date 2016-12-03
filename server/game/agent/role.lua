@@ -1,6 +1,4 @@
 local modulea = require "modulea"
-local log = require "log"
-
 local data = {}
 local role = {}
 

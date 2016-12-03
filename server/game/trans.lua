@@ -61,7 +61,8 @@ end
 function sendAllClient(t, data, dis)
 	assert(SERVICE_NAME == "center" or SERVICE_NAME == "scene")
 	local unfd
-	if dis and unfd = service.client[dis] then
+	if dis and service.client[dis] then
+		unfd = service.client[dis]
 		service.client[dis] = nil
 	end
 

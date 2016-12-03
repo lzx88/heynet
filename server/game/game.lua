@@ -1,7 +1,5 @@
 local skynet = require "skynet"
 local service = require "service"
-local log = require "log"
-confing = require "config"
 require "errno"
 require "trans"
 
