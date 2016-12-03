@@ -1,0 +1,19 @@
+game_lua_path = root.."game/?.lua;"..root.."game/agent/?.lua;"..root.."game/center/?.lua;"..root.."game/scene/?.lua;"..root.."game/db/?.lua;"
+
+--服务器索引
+server_idx = 0
+--agent池默认值
+agent_pool_init = 2
+
+config_path = root .. "game-config/"
+proto_path = root .. "game-proto/"
+
+gate_port = server_idx .. 5678 
+debug_port = server_idx .. 8000
+
+sproto_slot_c2s = 1
+sproto_slot_s2c = 2
+
+redis_host = "127.0.0.1"
+redis_port = 6379
+redis_db = 0

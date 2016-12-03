@@ -1,0 +1,17 @@
+.package {
+	type 0 : integer
+	session 1 : integer
+	ud 2 : string
+}
+
+error 1 {
+	request {
+		errno 0 : integer
+	}
+}
+
+push 1 {
+	request {
+		text 0 : string
+	}
+}
