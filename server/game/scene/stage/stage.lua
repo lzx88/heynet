@@ -16,12 +16,12 @@ function stage.load(id)
 	
 end
 
-function stage.add_role(id, info)
-	roles[id] = info
+function stage.enter(role)
+	roles[role.id] = role
 end
 
-function stage.remove_role(id)
-	roles[id] = nil
+function stage.exit(roleid)
+	roles[roleid] = nil
 
 end
 

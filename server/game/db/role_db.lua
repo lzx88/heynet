@@ -1,9 +1,13 @@
 local role = {}
 
-function role.load(DB, roleid)
-	local info = {}
+function role.load(DB, KEY)
+	local data = {
+		id = 1,
+		name = "heynet",
+		level = 5,
+	}
 
-	return info
+	return data
 end
 
 return role

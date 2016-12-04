@@ -6,12 +6,7 @@ local moduled = require "moduled"
 local conf
 local DB
 
-local db = {}
-
-function db.role(roleid, cmd, ...)
-	return moduled.dispatchR(roleid, cmd, ...)
-end
-
+local CMD = {}
 local function init()
 	conf = {
 		host = skynet.getenv "redis_host",
@@ -21,10 +16,10 @@ local function init()
     }
     DB = redis.connect(conf)
 
-    moduled.init(db, DB)
+    moduled.register(DB, CMD)
 end
 
 game.start{
-	command = db,
+	command = CMD,
 	init = init,
 }

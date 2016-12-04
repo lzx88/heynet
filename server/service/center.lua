@@ -16,31 +16,31 @@ local function onlogout()
 	-- body
 end
 
-local center = {}
-function center.login(roleid, info, agent, fd)
-	game.subAgent(roleid, agent)
-	game.subClient(roleid, fd)
-	roles[roleid] = info
+local CMD = {}
+function CMD.login(role, agent, fd)
+	log("Role[%d] %s login", role.id, role.name)
+	subAgent(agent, role.id)
+	subClient(fd, role.id)
+	data.roles[role.id] = role
 	onlogin()
 	modulec.loop(function(mgr)
 		if mgr.onlogin then
 			mgr.onlogin()
 		end
 	end)
-	return scene_mgr.get_scene_addr(info.mapid)
+	return scene_mgr.get_scene_addr(role.mapid)
 end
 
-function center.logout(roleid)
-	game.subscribe("agent", roleid)
-	game.subscribe_client(roleid)
-
+function CMD.logout(roleid)
 	modulec.loop(function(mgr)
 		if mgr.onlogout then
 			mgr.onlogout()
 		end
 	end)
 	onlogout()
-	roles[roleid] = nil
+	subAgent(nil, roleid)
+	subClient(nil, roleid)
+	data.roles[roleid] = nil
 end
 
 local function init()
@@ -48,7 +48,7 @@ local function init()
 end
 
 game.start{
-	command = center,
+	command = CMD,
 	info = data,
 	init = init,
 }

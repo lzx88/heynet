@@ -5,7 +5,7 @@ local log = require "log"
 
 local stage
 
-local scene = {}
+local CMD = {}
 
 local function iscopy(id)
 	return id >= 10000
@@ -15,32 +15,29 @@ local function iscity(id)
 	return id < 10000
 end
 
-function scene.load(id)
+function CMD.load(id)
 	if iscopy(id) then
 		stage = require "stage/copy"
 	elseif iscity(id) then
 		stage = require "stage/city"
 	end
 	stage.load(id)
-	log("load scene %s", id)
+	log("load CMD %s", id)
 end
 
-function scene.enter(roleid, info, agent, fd)
-	stage.add_role(roleid, info)
-
-	subService("agent", agent, roleid)
-	subService("client", fd, roleid)
+function CMD.login(role, fd)
+	log("Role[%d] %s login", role.id, role.name)
+	stage.enter(role)
+	subClient(fd, role.id)
 end
 
-function scene.exit(roleid)
-	stage.remove_role(rpleid)
-
-	subService("agent", nil, roleid)
-	subService("client", nil, roleid)
-	log("[%d]%s exit scene %s", role.id, "玩家x", "xxxx")
+function CMD.logout(roleid)
+	stage.exit(roleid)
+	subClient(nil, roleid)
+	log("[%d]%s exit CMD %s", role.id, "玩家x", "xxxx")
 end
 
 game.start {
-	command = scene,
+	command = CMD,
 	info = {stage = stage},
 }

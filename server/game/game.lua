@@ -6,17 +6,26 @@ require "trans"
 local game = {}
 local client
 
-function subService(name, addr, roleid)
-	assert(name == "agent" or name == "scene" or name == "client")
+function subAgent(addr, roleid)
+	assert(SERVICE_NAME ~= "agent")
+	assert(service.agent[roleid] ~= addr)
+	service.agent[roleid] = addr
+end
+
+function subScene(addr, roleid)
+	assert(SERVICE_NAME ~= "scene")
 	if SERVICE_NAME == "agent" then
-		service[name] = addr
+		service.scene = addr
 	else
-		assert(not service[name][roleid] and addr)
-		assert(not addr and service[name][roleid])
-		service[name][roleid] = addr
+		service.scene[roleid] = addr
 	end
-	if name == "client" and addr then
-		client.subscribe(addr)
+end
+
+function subClient(addr, roleid)
+	if SERVICE_NAME == "agent" then
+		service.client = addr
+	else
+		service.client[roleid] = addr
 	end
 end
 
@@ -24,7 +33,7 @@ end
 local transfer = {
 	agent = {"db", "client", "scene", "center"},
 	center = {"db", "client", "scene", "agent"},
-	scene = {"db", "client"},
+	scene = {"db", "client"},--场景服务不主动请求 代理服
 	db = {},
 }
 

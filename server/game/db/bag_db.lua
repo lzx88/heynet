@@ -1,7 +1,7 @@
 local bag = {}
 
-function bag.load(key, DB)
-	local k = key("size")
+function bag.setSize(DB, KEY)
+	local k = KEY("size")
 	DB:set(k, 100)
 	local size = DB:get(k)
 	return {size = size}

@@ -7,68 +7,55 @@ local require_db = {
 	T = "team_db",
 }
 
-local RoleKey = {}
-local RoleFunc = {}
+local keys = {}
 
-table.loop(require_db_role, function(path, key)
-	local mod = string.match(path, "[%a%d]+")
-	RoleFunc[mod] = require(path)
-	RoleKey[mod] = key
-end)
-require_db_role = nil
-
-local Func = {}
-local __genkey
-
-function genDBkey(mkey, suffix, roleid)
+local function genKey(mkey, suffix, roleid)
+	roleid = roleid and ("." .. roleid) or ""
 	return mkey .. roleid ..".".. suffix
 end
 
-local DB_
-
-table.loop(require_db, function(path, key)
-	local mod = string.match(path, "[%a%d]+")
-	local tbl = require(path)
-	table.loop(tbl, function( func, k )
-		local cmd = mod ..".".. k
-		Func[cmd] = function ( ... )
-			__genkey = function(suffix)
-				return genDBkey(key, suffix)
+local function loopCommand(files, func)
+	table.loop(files, function(fname, mkey)
+		local pos = string.match(fname, "()_db$")
+		local mod = string.sub(fname, 1, pos and (pos - 1))
+		assert(keys[mod] == nil, "Redis key".. mkey .." repeat!")
+		keys[mod] = mkey
+		local cmds = require(fname)
+		table.loop(cmds, function(f, k)
+			if type(f) == "function" then
+				func(mkey, mod ..".".. k, f)
 			end
-			return func(DB_, ... )
-		end
+		end)
 	end)
-end)
-require_db = nil
-
-local RDB
-local __genRkey
-
-local moduled = {}
-function moduled.dispathR(roleid, cmd, ...)
-	local mod, func = string.match(cmd, "([%a%d]+)%.([_%a%d]+)")
-	assert(RoleFunc[mod] and RoleFunc[mod][func], "DB Logic no impl: [role]" .. cmd)
-	assert(RoleKey[mod])
-	__genRkey = function(suffix)
-		return genDBkey(RoleKey[mod], suffix, roleid)
-	end
-	return RoleFunc[mod][func](RDB, ...)
 end
 
-function moduled.init(cmd, DB)
-	local mt = function(t, k)
-		return function (_, key, ...)
-			return DB[k](_, __genRkey(key), ...)
+local moduled = {}
+function moduled.register(DB, CMD)
+	loopCommand(require_db_role, function(mkey, k, func)
+		assert(CMD[k] == nil, "DB RPC command ".. k .." repeat!")
+		CMD[k] = function(roleid, ... )
+			local function fkey(suffix)
+				return genKey(mkey, suffix, roleid)
+			end
+			return func(DB, fkey, ...)
 		end
-	end
-	RDB = setmetatable({}, {__index = mt})
-	local mt = function(t, k)
-		return function (_, key, ...)
-			return DB[k](_, __genkey(key), ...)
+	end)
+	require_db_role = nil
+	loopCommand(require_db, function(mkey, k, func)
+		assert(CMD[k] == nil, "DB RPC command ".. k .." repeat!")
+		CMD[k] = function( ... )
+			local function fkey(suffix)
+				return genKey(mkey, suffix)
+			end
+			return func(DB, fkey, ...)
 		end
-	end
-	DB_ = setmetatable({}, {__index = mt})
-	setmetatable(cmd, {__index = Func})
+	end)
+	require_db = nil
+end
+
+function moduled.genKey(mod, ...)
+	assert(keys[mod])
+	return genKey(keys[mod], ...)
 end
 
 return moduled

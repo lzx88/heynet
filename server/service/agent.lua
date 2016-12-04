@@ -1,10 +1,11 @@
 local skynet = require "skynet"
+local service = require "service"
 local game = require "game"
 local client = require "client"
 local log = require "log"
 local role = require "role"
 
-local agent = {}
+local CMD = {}
 local data = {}
 local handler = {}
 
@@ -35,8 +36,9 @@ local function new_user(fd)
 		if data.fd == nil then
 			-- double check
 			if not data.exit then
-				data.exit = true	-- mark exit
 				skynet.call(service.manager, "lua", "exit", data.userid)
+				data = {}
+				data.exit = true	-- mark exit
 
 				role.logout()
 				--skynet.exit()
@@ -45,7 +47,7 @@ local function new_user(fd)
 	end
 end
 
-function agent.assign(fd, userid)
+function CMD.assign(fd, userid)
 	if data.exit then
 		return false
 	end
@@ -58,12 +60,12 @@ function agent.assign(fd, userid)
 end
 
 local function init()
-	role.init(handler, agent)
+	role.init(handler, CMD)
 	client.init(handler)
 end
 
 game.start {
-	command = agent,
+	command = CMD,
 	require = {"manager"},
 	info = data,
 	init = init,

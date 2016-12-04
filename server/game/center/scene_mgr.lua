@@ -35,7 +35,7 @@ end
 
 function scene_mgr.get_scene_addr(mapid)
 	--if city[mapid] then
-		return city[1]
+	return citys[1]
 end
 
 return scene_mgr

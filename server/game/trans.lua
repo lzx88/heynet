@@ -11,13 +11,16 @@ function callCenter( ... )
 end
 
 function callScene(roleid, ... )
-	local addr = roleid and service.scene[roleid] or service.scene
-	return skynet.call(addr, "lua", ...)
+	if SERVICE_NAME == "agent" then
+		skynet.call(service.scene, "lua", roleid, ...)
+	else
+		skynet.call(service.scene[roleid], "lua", ...)
+	end
 end
 
 function callAgent(roleid, ... )
-	local addr = roleid and service.agent[roleid] or service.agent
-	return skynet.call(addr, "lua", ...)
+	assert(SERVICE_NAME ~= "agent")
+	return skynet.call(service.agent[roleid], "lua", ...)
 end
 
 --内部非阻塞RPC
@@ -46,6 +49,7 @@ end
 
 --单机推送
 function sendClient(t, data, roleid)
+	assert(not roleid or (roleid and SERVICE_NAME ~= "agent"))
 	local fd = roleid and service.client[roleid] or service.client
 	service.push(fd, t, data)
 end

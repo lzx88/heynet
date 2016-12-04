@@ -72,7 +72,7 @@ function class(name, super)
 end
 
 --将变量转换成缩进格式字符串，若是表 会递归缩进
-function v2string(arg1, arg2)
+function val2str(arg1, arg2)
     local val = arg2 and arg2 or arg1
     local name = arg2 and arg1 or nil
     local str = ""
@@ -80,7 +80,7 @@ function v2string(arg1, arg2)
         for i = 1, n do
            str = str .. "  "
         end
-        k = k and k .. " = " or ""
+        k = k and '["'.. k .. '"] = ' or ""
         local t = type(v)
         if t == "table" then
             str = str .. k .. "{\n"
@@ -105,4 +105,8 @@ function v2string(arg1, arg2)
     end
     _2str(val, name, 1)
     return str
+end
+
+function dump(arg1, arg2)
+    print(val2str(arg1, arg2))
 end

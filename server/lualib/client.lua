@@ -54,8 +54,9 @@ end
 function client.proto()
 	local slot = skynet.getenv "sproto_slot_c2s"
 	host = sprotoloader.load(slot):host "package"
-	local slot = skynet.getenv "sproto_slot_c2s"
+	local slot = skynet.getenv "sproto_slot_s2c"
 	send = host:attach(sprotoloader.load(slot))
+	log("Load Proto")
 end
 
 function client.init(cmds)
