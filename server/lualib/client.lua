@@ -14,12 +14,13 @@ function client.dispatch(c)
 	proxy.subscribe(fd)
 	local ERROR = {}
 	while true do
-		local msg, sz = proxy.read(fd)
-		local type, name, args, response = host:dispatch(msg, sz)
-		assert(type == "REQUEST")
 		if c.exit then
 			return c
 		end
+		local msg, sz = proxy.read(fd)
+		local type, name, args, response = host:dispatch(msg, sz)
+		assert(type == "REQUEST")
+
 		local f = handler[name]
 		if f then
 			-- f may block , so fork and run
