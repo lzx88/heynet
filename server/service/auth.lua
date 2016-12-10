@@ -13,9 +13,9 @@ local FAIL = { ok = false }
 --用户唯一seesion 由用户注册后由 后台 产生的 至少跟用户名 和密码 对口的唯一 md5字符串 
 --隐藏真实密码
 
---注册用户 { session, username, password, source } 用户名 密码 来源等 返回给后台session 和 基础信息
+--注册用户 { session, username, source } 用户名 密码 来源等 返回给后台session 和 基础信息
 --可以由PHP后台直接访问数据库实现 
-function handler:registe_user(rqt)
+function handler:registe(rqt)
 	log("signup userid = %s", rqt.userid)
 
 	if users[rqt.userid] then 
@@ -72,4 +72,5 @@ service.init {
 	command = auth,
 	info = users,
 	init = init,
+	require = {"db"}
 }

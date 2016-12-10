@@ -1,18 +1,14 @@
 local require_db_role = {
-	R = "role_db",
-	RB = "bag_db",
+	role = "role_db",
+	bag = "bag_db",
 }
 
 local require_db = {
-	T = "team_db",
+	user = "user_db",
+	team = "team_db",
 }
 
 local keys = {}
-
-local function genKey(mkey, suffix, roleid)
-	roleid = roleid and ("." .. roleid) or ""
-	return mkey .. roleid ..".".. suffix
-end
 
 local function loopCommand(files, func)
 	table.loop(files, function(fname, mkey)
@@ -35,7 +31,7 @@ function moduled.register(DB, CMD)
 		assert(CMD[k] == nil, "DB RPC command ".. k .." repeat!")
 		CMD[k] = function(roleid, ... )
 			local function fkey(suffix)
-				return genKey(mkey, suffix, roleid)
+				return mkey .. "." ..roleid ..".".. suffix
 			end
 			return func(DB, fkey, ...)
 		end
@@ -45,7 +41,7 @@ function moduled.register(DB, CMD)
 		assert(CMD[k] == nil, "DB RPC command ".. k .." repeat!")
 		CMD[k] = function( ... )
 			local function fkey(suffix)
-				return genKey(mkey, suffix)
+				return  mkey .. ".".. suffix
 			end
 			return func(DB, fkey, ...)
 		end

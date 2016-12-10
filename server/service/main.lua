@@ -16,7 +16,7 @@ skynet.start(function()
 
 	local hub = skynet.uniqueservice "hub"
 	skynet.uniqueservice "db"
-	skynet.uniqueservice "center"	
+	skynet.uniqueservice "center"
 	local gate_port = tonumber(skynet.getenv "gate_port")
 	skynet.call(hub, "lua", "open", "0.0.0.0", gate_port)
 	
