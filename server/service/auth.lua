@@ -15,10 +15,10 @@ local FAIL = { ok = false }
 
 --注册用户 { session, username, source } 用户名 密码 来源等 返回给后台session 和 基础信息
 --可以由PHP后台直接访问数据库实现 
-function handler:registe(rqt)
+function handler:signup(rqt)
 	log("signup userid = %s", rqt.userid)
 
-	if users[rqt.userid] then 
+	if users[rqt.userid] then
 		return FAIL
 	else
 		users[rqt.userid] = true
@@ -26,7 +26,7 @@ function handler:registe(rqt)
 	end
 end
 
-function handler:signup(rqt)--创建角色 { session, name,	sex} 用户是否存在 角色名是否重复 是否有名字屏蔽词 如果注册成功  可以直接走 登录流程
+function handler:create_role(rqt)--创建角色 { session, name,	sex} 用户是否存在 角色名是否重复 是否有名字屏蔽词 如果注册成功  可以直接走 登录流程
 	log("signup userid = %s", rqt.userid)
 
 	if users[rqt.userid] then 

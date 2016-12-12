@@ -1,11 +1,11 @@
 local require_db_role = {
-	role = "role_db",
-	bag = "bag_db",
+	R = "role_db",
+	B = "bag_db",
 }
 
 local require_db = {
-	user = "user_db",
-	team = "team_db",
+	U = "user_db",
+	T = "team_db",
 }
 
 local keys = {}

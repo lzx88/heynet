@@ -12,9 +12,9 @@ end
 
 function callScene(roleid, ... )
 	if SERVICE_NAME == "agent" then
-		skynet.call(service.scene, "lua", roleid, ...)
+		return skynet.call(service.scene, "lua", roleid, ...)
 	else
-		skynet.call(service.scene[roleid], "lua", ...)
+		return skynet.call(service.scene[roleid], "lua", ...)
 	end
 end
 
@@ -25,13 +25,16 @@ end
 
 --内部非阻塞RPC
 function sendAgent(roleid, ... )
-	local addr = roleid and service.agent[roleid] or service.agent
-	skynet.send(addr, "lua", ...)
+	assert(SERVICE_NAME ~= "agent")
+	skynet.send(service.agent[roleid], "lua", ...)
 end
 
 function sendScene(roleid, ... )
-	local addr = roleid and service.scene[roleid] or service.scene
-	skynet.send(addr, "lua", ... )
+	if SERVICE_NAME == "agent" then
+		skynet.send(service.scene, "lua", roleid, ... )
+	else
+		skynet.send(service.scene[roleid], "lua", ... )
+	end
 end
 
 function sendDB( ... )
@@ -40,11 +43,6 @@ end
 
 function sendCenter( ... )
 	skynet.send(service.center, "lua", ... )
-end
-
---错误抛出
-function returnError(errno)
-	error(errno)
 end
 
 --单机推送

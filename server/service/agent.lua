@@ -38,9 +38,8 @@ local function new_user(fd)
 			if not data.exit then
 				skynet.call(service.manager, "lua", "exit", data.userid)
 				data = {}
-				data.exit = true	-- mark exit
-
 				role.logout()
+				data.exit = true	-- mark exit
 				--skynet.exit()
 			end
 		end

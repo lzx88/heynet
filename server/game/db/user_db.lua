@@ -1,13 +1,16 @@
 local user = {}
 
-function user.register(DB, KEY, username, session, password, source)
-	local data = {
-		id = 1,
-		name = "heynet",
-		level = 5,
-	}
-
-	return data
+function user.signup(DB, KEY, username, session, password, source)
+	local k = KEY(username)
+	if DB:exists(k) then
+		returnError(E_USER_REPEAT)
+	end
+	DB:hset(k, "username", username)
+	DB:hset(k, "session", session)
+	DB:hset(k, "password", password)
+	DB:hset(k, "source", source)
+	
+	return username
 end
 
 function user.create_role(DB, KEY)

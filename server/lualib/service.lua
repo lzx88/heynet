@@ -23,7 +23,7 @@ function service.init(mod)
 		skynet.dispatch("lua", function (_,_, cmd, ...)
 			local f = funcs[cmd]
 			if f then
-				skynet.ret(skynet.pack(f(...)))
+				skynet.ret(skynet.pack(pcall(f(...)))--返回 ok, errno, ...
 			else
 				log("Unknown command : [%s]", cmd)
 				skynet.response()(false)

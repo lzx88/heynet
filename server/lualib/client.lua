@@ -12,7 +12,6 @@ local handler
 function client.dispatch(c)
 	local fd = c.fd
 	proxy.subscribe(fd)
-	local ERROR = {}
 	while true do
 		if c.exit then
 			return c
@@ -20,7 +19,6 @@ function client.dispatch(c)
 		local msg, sz = proxy.read(fd)
 		local type, name, args, response = host:dispatch(msg, sz)
 		assert(type == "REQUEST")
-
 		local f = handler[name]
 		if f then
 			-- f may block , so fork and run
@@ -57,12 +55,11 @@ function client.proto()
 	host = sprotoloader.load(slot):host "package"
 	local slot = skynet.getenv "sproto_slot_s2c"
 	send = host:attach(sprotoloader.load(slot))
-	log("Load Proto")
+	log("Load sproto")
 end
 
 function client.init(cmds)
 	handler = cmds
 end
-
 
 return client

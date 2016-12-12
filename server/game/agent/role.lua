@@ -39,7 +39,7 @@ function role.login( root )
 	root["role"] = this
 	modulea.loop(function(name, impl)
 		if impl.onlgoin then
-			impl.onlgoin(this.id, root)--登录接口只做一些基础的数据加载，不能推送消息
+			impl.onlgoin(this.id, root)
 		end
 	end)
 	local scene = callCenter("login", social_info(), skynet.self(), root.fd)

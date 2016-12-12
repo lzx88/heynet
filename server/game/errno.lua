@@ -6,6 +6,11 @@ local function E(n, msg)
 	return n
 end
 
+--错误抛出
+function returnError(e)
+	error(e)
+end
+
 function errmsg(n)
 	return errno[n] or "unknown"
 end
@@ -29,7 +34,8 @@ E_NETWORK		= E(14, "网络异常")
 E_FUNC_CLOSE	= E(15, "功能暂时关闭")
 
 --角色错误
-E_LEVEL_LIMIT	= E(100, "等级限制")
+E_USER_REPEAT	= E(100, "角色已存在")
+E_LEVEL_LIMIT	= E(101, "等级限制")
 
 --
 E_NO_ENOUGH		= E(200, "等级限制")
