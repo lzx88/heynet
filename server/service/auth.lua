@@ -16,20 +16,15 @@ local FAIL = { ok = false }
 --注册用户 { session, username, source } 用户名 密码 来源等 返回给后台session 和 基础信息
 --可以由PHP后台直接访问数据库实现 
 function handler:signup(rqt)
+	log("signup userid = %s", rqt.username, rqt.session, rqt.password, rqt.source)
+	local userid = getResult(skynet.call(service.db, "lua", rqt))
+	return userid, rqt.session
+end
+
+function handler:create_role(rqt)--创建角色 { session, name, sex} 用户是否存在 角色名是否重复 是否有名字屏蔽词 如果注册成功  可以直接走 登录流程
 	log("signup userid = %s", rqt.userid)
 
 	if users[rqt.userid] then
-		return FAIL
-	else
-		users[rqt.userid] = true
-		return SUCC
-	end
-end
-
-function handler:create_role(rqt)--创建角色 { session, name,	sex} 用户是否存在 角色名是否重复 是否有名字屏蔽词 如果注册成功  可以直接走 登录流程
-	log("signup userid = %s", rqt.userid)
-
-	if users[rqt.userid] then 
 		return FAIL
 	else
 		users[rqt.userid] = true

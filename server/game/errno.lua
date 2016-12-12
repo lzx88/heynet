@@ -6,11 +6,18 @@ local function E(n, msg)
 	return n
 end
 
---错误抛出
-function returnError(e)
-	error(e)
+function errReturn(e)
+	error(e, 0)
 end
 
+function getResult(ok, e, ...)
+	if ok then
+		return e, ...
+	end
+	error(e, 0)
+end
+
+--错误抛出
 function errmsg(n)
 	return errno[n] or "unknown"
 end

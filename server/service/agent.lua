@@ -21,9 +21,9 @@ function handler:login()
 		return { ok = false }
 	end
 	data.fd = self.fd
-	role.login(data)
+	role.online(data)
 	self.login = true --必须有机制确保登录未完成 客户端不请求
-	return role.login_finish()
+	return {ok = true}
 end
 
 local function new_user(fd)
@@ -38,7 +38,7 @@ local function new_user(fd)
 			if not data.exit then
 				skynet.call(service.manager, "lua", "exit", data.userid)
 				data = {}
-				role.logout()
+				role.offline()
 				data.exit = true	-- mark exit
 				--skynet.exit()
 			end

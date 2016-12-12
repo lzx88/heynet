@@ -4,7 +4,7 @@ local log = require "log"
 local this = {}
 local role = {}
 
-local function onlogin()
+local function login()
 	local data = callDB("role.load", this.id)
 	this = data
 	if nil == this.mapid then
@@ -13,7 +13,12 @@ local function onlogin()
 	role.id = this.id
 end
 
-local function onlogout()
+local function login_finish()
+	log("[%s] %s login succ", this.id, this.name)
+	sendClient("push", { text = "welcome" })
+end
+
+local function logout()
 	
 end
 
@@ -33,37 +38,32 @@ local function enity_info()
 	}
 end
 
-function role.login( root )
+function role.online( root )
 	this.id = root.userid
-	onlogin()
+	login()
 	root["role"] = this
 	modulea.loop(function(name, impl)
-		if impl.onlgoin then
-			impl.onlgoin(this.id, root)
+		if impl.login then
+			impl.login(root)
 		end
 	end)
 	local scene = callCenter("login", social_info(), skynet.self(), root.fd)
 	subScene(scene, this.id)
 	callScene("login", enity_info(), root.fd)
 	subClient(root.fd)
+	login_finish()
 end
 
-function role.login_finish()
-	log("[%s] %s login succ", this.id, this.name)
-	sendClient("push", { text = "welcome" })
-	return { ok = true }
-end
-
-function role.logout()
+function role.offline()
 	callCenter("logout", this.id)
 	callScene("logout", this.id)
 	subScene(nil, this.id)
 	modulea.anti(function(m)
-		if m.onlogout then
-			m.onlogout()
+		if m.logout then
+			m.logout()
 		end
 	end)
-	onlogout()
+	logout()
 	subClient(nil)
 end
 
