@@ -1,6 +1,6 @@
 local skynet = require "skynet"
 local service = require "service"
-require "errno"
+
 require "trans"
 
 local game = {}

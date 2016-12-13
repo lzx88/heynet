@@ -1,5 +1,6 @@
 local skynet = require "skynet"
 local log = require "log"
+require "errno"
 
 local service = {}
 
@@ -30,6 +31,10 @@ function service.init(mod)
 			end
 		end)
 	end)
+end
+
+function service.call(addr, ...)
+	return getResult(skynet.call(service[addr], "lua", ...)
 end
 
 return service

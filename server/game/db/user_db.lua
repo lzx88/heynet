@@ -1,7 +1,8 @@
+local moduled = require "moduled"
 local user = {}
 
-function user.signup(DB, args)
-	local ku = KEY("user", "hUsername")
+function user.signup(DB, KEY, args)
+	local ku = KEY("hUsername")
 	if 0 == DB:hexists(ku, args.username) then
 		errReturn(E_USER_REPEAT)
 	end
@@ -10,9 +11,7 @@ function user.signup(DB, args)
 		errReturn(E_USER_REPEAT)
 	end
 
-	local krole = genRedisKey("role", args.name)
-
-
+	moduled.call("role.isexists", args.name)
 
 	local kid = KEY("_id")
 	local userid = DB:incr(kid)
@@ -20,7 +19,16 @@ function user.signup(DB, args)
 	if 0 == DB:exists(k) then
 		errReturn(E_USER_REPEAT)
 	end
-	DB:hmset(k, "userid", userid, "username", args.username, "session", args.session, "password", args.password, "source", args.source)
+
+	local roleid = moduled.call("role.create", args.name, userid)
+
+	DB:hmset(k, "userid", userid,
+				"bonline", false,
+				"userid", userid,
+				"username", args.username,
+				"session", args.session,
+				"password", args.password,
+				"source", args.source)
 
 	DB:hset(ku, args.username, userid)
 	DB:hset(ks, args.session, userid)

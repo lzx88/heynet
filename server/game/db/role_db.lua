@@ -10,4 +10,13 @@ function role.load(DB, KEY)
 	return data
 end
 
+function role.isexists(DB, KEY, name)
+	return data
+end
+
+function role.create(DB, KEY, name, userid)
+	local roleid = 1
+	return roleid
+end
+
 return role

@@ -5,47 +5,43 @@ local require_db = {
 	T = "team_db",
 }
 
-local keys = {}
-
-function genRedisKey(mod, middle, suffix)
-	assert(keys[mod], "Redis key".. mkey .." no exist!")
-	middle = middle and ("." .. middle) or ""
-	suffix = suffix and ("." .. suffix) or ""
-	return keys[mod] .. middle .. suffix
-end
+local mt = {}
 
 local moduled = {}
 function moduled.register(DB, CMD)
+	local keytbl = {}
 	local function loopcmd(files, func)
-		table.loop(files, function(fname, mkey)
+		table.loop(files, function(fname, mainkey)
 			local pos = string.match(fname, "()_db$")
 			local mod = string.sub(fname, 1, pos and (pos - 1))
-			assert(keys[mod] == nil, "Redis key".. mkey .." repeat!")
-			keys[mod] = mkey
-			local cmds = require(fname)
-			table.loop(cmds, function(f, k)
+			assert(keytbl[mod] == nil, "Redis key".. mainkey .." repeat!")
+			keytbl[mod] = mainkey
+			local tbl = require(fname)
+			table.loop(tbl, function(f, k)
 				if type(f) == "function" then
-					func(mod, k, f)
+					local cmd = mod ..".".. k
+					func(mainkey, cmd, f)
 				end
 			end)
 		end)
 	end
 
-	loopcmd(require_db, function(mod, k, func)
-		local cmd = mod ..".".. k
-		assert(CMD[cmd] == nil, "DB RPC command ".. cmd .." repeat!")
-		CMD[cmd] = function( ... )
-			local function genkey(middle, suffix)
-				return genRedisKey(mod, middle, suffix)
+	loopcmd(require_db, function(mainkey, cmd, func)
+		assert(mt[cmd] == nil, "DB RPC command ".. cmd .." repeat!")
+		mt[cmd] = function( ... )
+			local function gen_redis_key(middle, suffix)
+				return mainkey .. (middle and ("." .. middle) or "") .. (suffix and ("." .. suffix) or "")
 			end
-			return func(DB, genkey, ... )
+			return func(DB, gen_redis_key, ... )
 		end
 	end)
+
 	require_db = nil
+	setmetatable(CMD, __index = mt)
 end
 
-function moduled.call()
-	-- body
+function moduled.call( cmd, ... )
+	return getResult(pcall( mt[cmd], ... ))
 end
 
 return moduled

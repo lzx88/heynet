@@ -1,4 +1,3 @@
-local skynet = require "skynet"
 local service = require "service"
 local client = require "client"
 local log = require "log"
@@ -14,10 +13,10 @@ local FAIL = { ok = false }
 --隐藏真实密码
 
 --注册用户 { session, username, source } 用户名 密码 来源等 返回给后台session 和 基础信息
---可以由PHP后台直接访问数据库实现 
+--可以由PHP后台直接访问数据库实现
 function handler:signup(rqt)
 	log("signup userid = %s", rqt.username, rqt.session, rqt.password, rqt.source)
-	local userid = getResult(skynet.call(service.db, "lua", rqt))
+	local userid = service.call("db", rqt)
 	return userid, rqt.session
 end
 
