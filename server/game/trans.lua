@@ -3,24 +3,24 @@ local service = require "service"
 
 --内部阻塞RPC
 function callDB( ... )
-	return skynet.call(service.db, "lua", ...)
+	return getResult(skynet.call(service.db, "lua", ...))
 end
 
 function callCenter( ... )
-	return skynet.call(service.center, "lua", ...)
+	return getResult(skynet.call(service.center, "lua", ...))
 end
 
 function callScene(roleid, ... )
 	if SERVICE_NAME == "agent" then
-		return skynet.call(service.scene, "lua", roleid, ...)
+		return getResult(skynet.call(service.scene, "lua", roleid, ...))
 	else
-		return skynet.call(service.scene[roleid], "lua", ...)
+		return getResult(skynet.call(service.scene[roleid], "lua", ...))
 	end
 end
 
 function callAgent(roleid, ... )
 	assert(SERVICE_NAME ~= "agent")
-	return skynet.call(service.agent[roleid], "lua", ...)
+	return getResult(skynet.call(service.agent[roleid], "lua", ...))
 end
 
 --内部非阻塞RPC

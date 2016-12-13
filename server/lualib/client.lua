@@ -26,9 +26,10 @@ function client.dispatch(c)
 				local ok, result = pcall(f, c, args)
 				if ok then
 					proxy.write(fd, response(result))
+				elseif type(result) == "number" then
+					proxy.write(fd, send("error", result))
 				else
 					log("raise error = %s", result)
-					proxy.write(fd, send("error", result))
 				end
 			end)
 		else

@@ -1,6 +1,9 @@
+local kHashName = genRedisKey("role", "name")
+local kID = moduled.key("role", "_id")
+
 local role = {}
 
-function role.load(DB, KEY)
+function role.load(DB)
 	local data = {
 		id = 1,
 		name = "heynet",
@@ -10,12 +13,25 @@ function role.load(DB, KEY)
 	return data
 end
 
-function role.isexists(DB, KEY, name)
-	return data
+function role.isexists(DB, name)
+	if 1 == DB:hexists(kHashName, name) then
+		error(E_ROLE_REPEAT)
+	end
 end
 
-function role.create(DB, KEY, name, userid)
-	local roleid = 1
+function role.create(DB, name, sex, userid)
+	local roleid = DB:incr(kID)
+	local hkey = genRedisKey("role", roleid)
+	if 1 == DB:exists(hkey) then
+		error(E_ROLE_REPEAT)
+	end
+
+	DB:hmset(hkey,
+		"roleid", roleid,
+		"name", name,
+		"sex", sex,
+		"userid", userid)
+	
 	return roleid
 end
 

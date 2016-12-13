@@ -1,58 +1,66 @@
 local moduled = require "moduled"
 local user = {}
 
-function user.signup(DB, KEY, args)
-	local ku = KEY("hUsername")
-	if 0 == DB:hexists(ku, args.username) then
-		errReturn(E_USER_REPEAT)
+local kHashUsername = genRedisKey("user", "username")
+local kHashSession = genRedisKey("user", "session")
+local kID = genRedisKey("user", "_id")
+
+function user.signup(DB, args)
+	if 1 == DB:hexists(kHashUsername, args.username) then
+		error(E_USER_REPEAT)
 	end
-	local ks = KEY("hSession")
-	if 0 == DB:hexists(ks, args.session) then
-		errReturn(E_USER_REPEAT)
+	if 1 == DB:hexists(kHashSession, args.session) then
+		error(E_USER_REPEAT)
 	end
 
 	moduled.call("role.isexists", args.name)
 
-	local kid = KEY("_id")
-	local userid = DB:incr(kid)
-	local k = KEY(userid)
-	if 0 == DB:exists(k) then
-		errReturn(E_USER_REPEAT)
+	local userid = DB:incr(kID)
+	local hkey = genRedisKey("user", userid)
+	if 1 == DB:exists(hkey) then
+		error(E_USER_REPEAT)
 	end
 
-	local roleid = moduled.call("role.create", args.name, userid)
+	local roleid = moduled.call("role.create", args.name, args.sex, userid)
 
-	DB:hmset(k, "userid", userid,
-				"bonline", false,
-				"userid", userid,
-				"username", args.username,
-				"session", args.session,
-				"password", args.password,
-				"source", args.source)
+	DB:hmset(hkey,
+		"userid", userid,
+		"loginrole", 0,
+		"userid", userid,
+		"username", args.username,
+		"session", args.session,
+		"password", args.password,
+		"source", args.source)
 
-	DB:hset(ku, args.username, userid)
-	DB:hset(ks, args.session, userid)
-	return userid
+	DB:hset(kHashUsername, args.username, userid)
+	DB:hset(kHashSession, args.session, userid)
+	return userid, roleid
 end
 
-function user.create_role(DB, KEY)
-	local data = {
-		id = 1,
-		name = "heynet",
-		level = 5,
-	}
+function user.create_role(DB, args)
+	local userid = DB:hget(kHashSession, args.session)
+	if not userid then
+		error(E_USER_NO_EXIST)
+	end
+	local hkey = genRedisKey("user", userid)
+	if 0 == DB:exists(hkey) then
+		error(E_USER_NO_EXIST)
+	end
 
-	return data
+	return moduled.call("role.create", args.name, args.sex, userid)
 end
 
-function user.query(DB, KEY)
-	local data = {
-		id = 1,
-		name = "heynet",
-		level = 5,
-	}
-
-	return data
+function user.query(DB, session)
+	local userid = DB:hget(kHashSession, args.session)
+	if not userid then
+		error(E_USER_NO_EXIST)
+	end
+	local hkey = genRedisKey("user", userid)
+	local loginrole = DB:hmget(hkey, "loginrole")
+	if not loginrole then
+		error(E_USER_NO_EXIST)
+	end
+	return userid, loginrole
 end
 
 return user

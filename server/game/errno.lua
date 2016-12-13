@@ -6,18 +6,6 @@ local function E(n, msg)
 	return n
 end
 
-function errReturn(e)
-	error(e, 0)
-end
-
-function getResult(ok, e, ...)
-	if ok then
-		return e, ...
-	end
-	error(e, 0)
-end
-
---错误抛出
 function errmsg(n)
 	return errno[n] or "unknown"
 end
@@ -34,15 +22,18 @@ E_DB			= E(7, "数据库操作失败")
 E_MSG_TOO_LONG	= E(8, "消息包太长")
 E_NO_PROTO		= E(9, "不存在此协议")
 E_NO_LOGIN		= E(10, "未登录")
-E_SRV_STOP		= E(11, "服务故障")
+E_SRV_STOP		= E(11, "逻辑错误")
 E_BUSY			= E(12, "服务忙")
 E_LOGINED		= E(13, "已登录")
 E_NETWORK		= E(14, "网络异常")
 E_FUNC_CLOSE	= E(15, "功能暂时关闭")
 
 --角色错误
-E_USER_REPEAT	= E(100, "角色已存在")
-E_LEVEL_LIMIT	= E(101, "等级限制")
+E_USER_REPEAT	= E(100, "用户已存在")
+E_USER_NO_EXIST	= E(101, "用户不存在")
+E_ROLE_REPEAT	= E(102, "角色已存在")
+E_ROLE_NO_EXIST	= E(103, "角色不存在")
+E_LEVEL_LIMIT	= E(104, "等级限制")
 
 --
 E_NO_ENOUGH		= E(200, "等级限制")

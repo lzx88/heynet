@@ -4,6 +4,21 @@ require "errno"
 
 local service = {}
 
+function getResult(ok, e, ...)
+	if ok then
+		return e, ...
+	end
+	error(e)--错误抛出
+end
+
+local function setResult(ok, e, ...)
+	if not ok and type(e) ~= "number" then
+		log("raise error = %s", e)
+		e = E_SRV_STOP
+	end
+	return ok, e, ...
+end
+
 function service.init(mod)
 	local funcs = mod.command
 	if mod.info then
@@ -24,7 +39,7 @@ function service.init(mod)
 		skynet.dispatch("lua", function (_,_, cmd, ...)
 			local f = funcs[cmd]
 			if f then
-				skynet.ret(skynet.pack(pcall(f(...)))--返回 ok, errno, ...
+				skynet.ret(skynet.pack(setResult(pcall(f, ...))))
 			else
 				log("Unknown command : [%s]", cmd)
 				skynet.response()(false)
@@ -34,7 +49,7 @@ function service.init(mod)
 end
 
 function service.call(addr, ...)
-	return getResult(skynet.call(service[addr], "lua", ...)
+	return getResult(skynet.call(service[addr], "lua", ...))
 end
 
 return service
