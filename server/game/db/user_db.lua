@@ -25,7 +25,7 @@ function user.signup(DB, args)
 
 	DB:hmset(hkey,
 		"userid", userid,
-		"loginrole", 0,
+		"loginrole", nil,
 		"userid", userid,
 		"username", args.username,
 		"session", args.session,
@@ -56,10 +56,7 @@ function user.query(DB, session)
 		error(E_USER_NO_EXIST)
 	end
 	local hkey = genRedisKey("user", userid)
-	local loginrole = DB:hmget(hkey, "loginrole")
-	if not loginrole then
-		error(E_USER_NO_EXIST)
-	end
+	local loginrole = DB:hget(hkey, "loginrole")
 	return userid, loginrole
 end
 

@@ -8,7 +8,7 @@ local hub = {}
 local data = { socket = {} }
 
 local function auth_socket(fd)
-	return service.call("auth", "shakehand", fd)
+	return skynet.call(service.auth, "lua", "shakehand", fd)
 end
 
 local function assign_agent(fd, userid)
@@ -23,7 +23,7 @@ end
 function new_socket(fd, addr)
 	data.socket[fd] = "[AUTH]"
 	proxy.subscribe(fd)
-	local ok, userid = pcall(auth_socket, fd)
+	local ok, userid, exit_code = auth_socket(fd)
 	if ok then
 		data.socket[fd] = userid
 		if pcall(assign_agent, fd, userid) then

@@ -13,7 +13,6 @@ local function new_agent()
 end
 
 local function free_agent(agent)
-	--skynet.kill(agent)
 	table.insert(pool, agent)
 end
 
@@ -46,7 +45,7 @@ function manager.create(n)
 	n = n or 5
 	for i = 1, n do
 		local agent = skynet.newservice "agent"
-		table.insert(pool, agent)
+		free_agent(agent)
 	end
 end
 

@@ -41,12 +41,9 @@ function handler:signin(rqt)
 	self.session = rqt.session
 	
 	local userid, loginrole = service.call("db", "user.query", rqt.session)
+
 	self.userid = userid
-	if loginrole > 0 then
-		self.exit = 1
-	else
-		self.exit = 2
-	end
+	self.exit = loginrole and 1 or 2
 end
 
 function handler:ping()
