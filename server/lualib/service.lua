@@ -13,8 +13,8 @@ end
 
 local function setResult(ok, e, ...)
 	if not ok and type(e) ~= "number" then
-		log("raise error = %s", e)
-		e = E_SRV_STOP
+		log("Raise error = %s", e)
+		return false, E_SRV_STOP
 	end
 	return ok, e, ...
 end

@@ -1,13 +1,13 @@
 local errno = {}
 
+function errmsg(n)
+	return errno[n] or "unknown"
+end
+
 local function E(n, msg)
 	assert(errno[n] == nil, string.format("Had the same errno [%x] msg = %s", n, msg))
 	errno[n] = msg
 	return n
-end
-
-function errmsg(n)
-	return errno[n] or "unknown"
 end
 
 --系统错误码

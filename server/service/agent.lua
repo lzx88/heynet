@@ -27,8 +27,8 @@ function handler:login()
 end
 
 local function new_user(fd)
-	local ok, error = pcall(client.dispatch , { fd = fd })
-	log("fd=%d is gone. error = %s", fd, error)
+	local ok, err = pcall(client.dispatch , { fd = fd })
+	log("fd=%d is gone. error = %s", fd, err)
 	client.close(fd)
 	if data.fd == fd then
 		data.fd = nil
@@ -36,17 +36,17 @@ local function new_user(fd)
 		if data.fd == nil then
 			-- double check
 			if not data.exit then
+				data.exit = true	-- mark exit
+				role.offline()
 				skynet.call(service.manager, "lua", "exit", data.userid)
 				data = {}
-				role.offline()
-				data.exit = true	-- mark exit
 				--skynet.exit()
 			end
 		end
 	end
 end
 
-function CMD.assign(fd, userid)
+function CMD.assign(fd, userid, token, loginrole)
 	if data.exit then
 		return false
 	end

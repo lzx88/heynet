@@ -11,22 +11,17 @@ local function auth_socket(fd)
 	return skynet.call(service.auth, "lua", "shakehand", fd)
 end
 
-local function assign_agent(fd, userid)
-	skynet.call(service.manager, "lua", "assign", fd, userid)
-end
-
-local function create_agent_pool()
-	local n = skynet.getenv "agent_pool_init"
-	skynet.call(service.manager, "lua", "create", n)
+local function assign_agent(fd, userid, token, loginrole)
+	return skynet.call(service.manager, "lua", "assign", fd, userid, token, loginrole)
 end
 
 function new_socket(fd, addr)
 	data.socket[fd] = "[AUTH]"
 	proxy.subscribe(fd)
-	local ok, userid, exit_code = auth_socket(fd)
+	local ok, userid, token, loginrole = auth_socket(fd)
 	if ok then
 		data.socket[fd] = userid
-		if pcall(assign_agent, fd, userid) then
+		if assign_agent(fd, userid, token, loginrole) then
 			return	-- succ
 		else
 			log("Assign failed %s to %s", addr, userid)
@@ -39,7 +34,6 @@ function new_socket(fd, addr)
 end
 
 function hub.open(ip, port)
-	create_agent_pool()
 	log("Listen %s:%d", ip, port)
 	assert(data.fd == nil, "Already open")
 	data.fd = socket.listen(ip, port)

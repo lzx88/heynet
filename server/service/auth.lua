@@ -6,8 +6,9 @@ local auth = {}
 local users = {}
 local handler = {}
 
-local SUCC = { ok = true }
-local FAIL = { ok = false }
+local function gettoken()
+	return math.random()
+end
 
 --用户唯一seesion 由用户注册后由 后台 产生的 至少跟用户名 和密码 对口的唯一 md5字符串 
 --隐藏真实密码
@@ -22,9 +23,6 @@ end
 
 function handler:create_role(rqt)
 --创建角色 { session, name, sex} 用户是否存在 角色名是否重复 是否有名字屏蔽词 如果注册成功  可以直接走 登录流程
-	if self.session ~= rqt.session then
-		error(E_ILL_OPR)
-	end
 	local roleid = service.call("db", "user.create_role", rqt)
 	return { roleid = roleid, session = rqt.session }
 end
@@ -37,13 +35,18 @@ DB 查询 是否存在该用户 返回 在线状态
 向agent 处理 login消息的时候 验证token 以防止 刷登录]] 
 function handler:signin(rqt)
 	log("signin rolename = %s", rqt.name)
-	assert(not self.session)
+	if self.session then
+		error(E_ILL_OPR)
+	end
 	self.session = rqt.session
 	
 	local userid, loginrole = service.call("db", "user.query", rqt.session)
-
 	self.userid = userid
-	self.exit = loginrole and 1 or 2
+	self.loginrole = loginrole
+	self.token = gettoken()
+
+	self.exit = true
+	return {token = self.token}
 end
 
 function handler:ping()
@@ -52,7 +55,7 @@ end
 
 function auth.shakehand(fd)
 	local c = client.dispatch({ fd = fd }, handler)
-	return c.userid
+	return c.userid, c.token, c.loginrole
 end
 
 local function init()
@@ -64,5 +67,5 @@ service.init {
 	command = auth,
 	info = users,
 	init = init,
-	require = {"db"}
+	require = {"db", "manager"}
 }

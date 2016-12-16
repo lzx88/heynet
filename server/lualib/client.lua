@@ -29,7 +29,7 @@ function client.dispatch(c)
 				elseif type(result) == "number" then
 					proxy.write(fd, send("error", result))
 				else
-					log("raise error = %s", result)
+					log("Raise error = %s", result)
 				end
 			end)
 		else
