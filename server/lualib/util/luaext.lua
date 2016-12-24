@@ -73,12 +73,11 @@ end
 
 --将变量转换成缩进格式字符串，若是表 会递归缩进
 function val2str(arg1, arg2)
-    local val = arg2 and arg2 or arg1
-    local name = arg2 and arg1 or nil
     local str = ""
-    function _2str(v, k, n)
+    local tab = 1
+    local function _2str(v, k, n)
         for i = 1, n do
-           str = str .. "  "
+            str = str .. "  "
         end
         k = k and k .. ' = ' or ""
         local t = type(v)
@@ -91,20 +90,16 @@ function val2str(arg1, arg2)
                 s = k_
             end
             for k_,v_ in pairs(v) do
-                if type(k_) == "number" and k_ > s then
-                    _2str(v_, k_, n)
-                end
+                if type(k_) == "number" and k_ > s then _2str(v_, k_, n) end
             end
             for k_,v_ in pairs(v) do
-                if type(k_) ~= "number" then
-                    _2str(v_, k_, n)
-                end
+                if type(k_) ~= "number" then _2str(v_, k_, n) end
             end
             n = n - 1
             for i = 1, n do
                 str = str .. "  "
             end
-            str = str .. "}\n"
+            str = str .. (n == tab and "}\n" or "}\n")
         elseif t == "string" then
             str = str .. k .. "\"" .. v .. "\"\n"
         elseif t == "number" then
@@ -115,7 +110,10 @@ function val2str(arg1, arg2)
             assert(false)
         end
     end
-    _2str(val, name, 1)
+    
+    local val = arg2 and arg2 or arg1
+    local name = arg2 and arg1 or nil
+    _2str(val, name, tab)
     return str
 end
 
