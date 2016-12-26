@@ -99,7 +99,7 @@ function val2str(arg1, arg2)
             for i = 1, n do
                 str = str .. "  "
             end
-            str = str .. (n == tab and "}\n" or "}\n")
+            str = str .. (n == tab and "}" or "}\n")
         elseif t == "string" then
             str = str .. k .. "\"" .. v .. "\"\n"
         elseif t == "number" then
