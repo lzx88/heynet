@@ -1,49 +1,3 @@
-function val2str(arg1, arg2)
-    local str = ""
-    local tab = 1
-    local function _2str(v, k, n)
-        for i = 1, n do
-            str = str .. "  "
-        end
-        k = k and k .. ' = ' or ""
-        local t = type(v)
-        if t == "table" then
-            str = str .. k .. "{\n"
-            n = n + 1
-            local s = 0
-            for k_,v_ in ipairs(v) do
-                _2str(v_, k_, n)
-                s = k_
-            end
-            for k_,v_ in pairs(v) do
-                if type(k_) == "number" and k_ > s then _2str(v_, k_, n) end
-            end
-            for k_,v_ in pairs(v) do
-                if type(k_) ~= "number" then _2str(v_, k_, n) end
-            end
-            n = n - 1
-            for i = 1, n do
-                str = str .. "  "
-            end
-            str = str .. (n == tab and "}" or "}\n")
-        elseif t == "string" then
-            str = str .. k .. "\"" .. v .. "\"\n"
-        elseif t == "number" then
-            str = str .. k .. v .. "\n"
-        elseif t == "function" or t == "boolean" then
-            str = str .. k .. tostring(v) .. "\n"
-        else
-            assert(false)
-        end
-    end
-    
-    local val = arg2 and arg2 or arg1
-    local name = arg2 and arg1 or nil
-    _2str(val, name, tab)
-    return str
-end
-function dump(arg1, arg2) print(val2str(arg1, arg2)) end
-
 local lpeg = require "lpeg"
 local P = lpeg.P
 local S = lpeg.S
@@ -76,6 +30,7 @@ local word = alpha * (alpha + alnum) ^ 0
 local name = C(word)
 local typename = C(word * ("." * word) ^ 0)
 local tag = P"0"^0 * R"19"^1 * R"09"^0 / tonumber
+local protoid = R"09"^1 / tonumber
 
 local lineend = lpeg.Cmt((P"\n" + "\r\n") * lpeg.Carg(1) ,count_lines)
 local comment = "--" * (1 - lineend) ^0 * (lineend + eof)
@@ -103,7 +58,7 @@ local protocol = P {
     "ALL",
     ALL = multipat(V"STRUCT" + V"PROTOCOL"),
     STRUCT = namedpat("struct", name * custompat(multipat(V"FIELD" + V"STRUCT"))),
-    PROTOCOL = namedpat("protocol", tag * blankpat"=" * blankpat(name) * V"PROTO"),
+    PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(name) * V"PROTO"),
     PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
     RESPONSE = namedpat("response", P"response" * (custompat(multipat(V"FIELD")) + blankpat"=" * typename)),
     FIELD = namedpat("field", typename * (C"[]" + (P"[" * blankpat(name) * "]"))^-1 * blanks * name * blankpat"=" * tag),
@@ -111,28 +66,30 @@ local protocol = P {
 
 local protofile = dummy * protocol * dummy * eof
 
--- The protocol of zproto
 --[[
-1.字段tag从1开始
-2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
-3.协议中不允许定义自定义类型，如果有esponse 字段 表示返回包 
+-- The protocol of zproto
+--1.字段tag从1开始
+--2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
+--3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
+--4.内建关键字为 number, string, bool, response 不允许作为 字段name
+--5.自定义类型可以内嵌自定义类型
 type{
     string name = 1
     field {
-        string name =1
+        string name     =1
         integer buildin = 2
-        integer[] type = 3
-        integer tag =4
+        integer[] type  = 3
+        integer tag     =4
         boolean integer = 5
     }
-    field[name] fields =2
+    field[name] fields  =2
 }
 
 0=protocol{
-    string name = 1--fdfsdf
-    integer buildin  = 2--fdfsdf
+    string name         =   1--fdfsdf
+    integer buildin     = 2--fdfsdf
     response {
-      integer index = 1
+      integer index     = 1
     }
 }
 
@@ -140,64 +97,143 @@ type{
     response = type.field
 }
 ]]
+local buildin = { number = 1, string = 2, bool = 3, response = 4}
+local function getname(str)
+    assert(not buildin[str], "Buildin type ".. str .." cann't be use for name.")
+    return str
+end
+
+local function checktype(types, ptype, t)
+    if buildin[t] then
+       assert(t ~= "response", "Buildin type response cann't be use for name.")
+       return t
+    end
+    local fullname = ptype .. "." .. t
+    if types[fullname] then
+        return fullname
+    else
+        ptype = ptype:match "(.+)%..+$"
+        if ptype then
+            return checktype(types, ptype, t)
+        elseif types[t] then
+            return t
+        end
+    end
+end
 
 local convert = {}
 
+function convert.field(t, p, typename)
+    local r = { type = p[1], name = getname(p[2])}
+    local tag = p[3]
+    if p[4] then
+        tag = p[4]
+        r.name = getname(p[3])
+        if p[2] == "[]" then
+            r.array = true
+        else 
+            r.key = p[2]
+        end
+    end
+
+    assert( not t[tag], "Redefined tag in ".. typename ..".".. r.name)
+    assert( not t[r.name], "Redefined name in ".. typename ..".".. r.name)
+    t[tag] = true
+    t[r.name] = true
+    
+    return tag, r
+end
+
 function convert.protocol(all, obj)
     local result = { tag = obj[1] }
-    for _, p in ipairs(obj[3]) do
-        assert(result[p[1]] == nil)
-        local typename = p[2]
-        if type(typename) == "table" then
-            local struct = typename
-            typename = obj[1] .. "." .. p[1]
-            all.type[typename] = convert.type(all, { typename, struct })
+    local response = obj[4]
+    local field = nil
+    if obj[3] then
+        if obj[3].type == "response" then
+            response = obj[3]
+        elseif obj[3].type == nil then
+            field = obj[3]
         end
-        result[p[1]] = typename
+    end
+
+    if field then
+        local t = {}
+        for _, p in ipairs(field) do
+            if not result.field then
+                result.field = {}
+            end
+            local tag, r = convert.field(t, p, obj[2])
+            result.field[tag] = r
+        end
+    end
+            
+    if response then
+        if "table" == type(response[1]) then 
+            local t = {}
+            for _, p in ipairs(response[1]) do
+                result.response = {}
+                local tag, r = convert.field(t, p, obj[2] ..".response")
+                result.response[tag] = r
+            end
+        else
+            result.response = response[1]
+        end
     end
     return result
 end
 
 function convert.struct(all, obj)
     local result = {}
-    local typename = obj[1]
+    local typename = getname(obj[1])
     local tags = {}
     local names = {}
     for _, f in ipairs(obj[2]) do
         if f.type == "field" then
-            local name = f[1]
-            if names[name] then
-                error(string.format("redefine %s in type %s", name, typename))
-            end
-            names[name] = true
-            local tag = f[2]
-            if tags[tag] then
-                error(string.format("redefine tag %d in type %s", tag, typename))
-            end
-            tags[tag] = true
-            local field = { name = name, tag = tag }
-            table.insert(result, field)
-            local fieldtype = f[3]
-            if fieldtype == "*" then
-                field.array = true
-                fieldtype = f[4]
-            end
-            local mainkey = f[5]
-            if mainkey then
-                assert(field.array)
-                field.key = mainkey
-            end
-            field.typename = fieldtype
+            local tag, r = convert.field(tags, f, typename)
+            result[tag] = r
         else
-            assert(f.type == "type")    -- nest type
+            assert(f.type == "struct")    -- nest type
             local nesttypename = typename .. "." .. f[1]
             f[1] = nesttypename
-            assert(all.type[nesttypename] == nil, "redefined " .. nesttypename)
-            all.type[nesttypename] = convert.type(all, f)
+            assert(all.struct[nesttypename] == nil, "Redefined " .. nesttypename)
+            all.struct[nesttypename] = convert.struct(all, f)
         end
     end
-    table.sort(result, function(a,b) return a.tag < b.tag end)
     return result
+end
+
+local function check_protocol(r)
+    local map = {}
+    for name, v in pairs(r.protocol) do
+        if type(v.response) == "string" and not r.struct[v.response] then
+            error(string.format("Undefined response type %s in protocol %s", v.response, name))
+        end
+        if v.field then
+            for tag, f in pairs(v.field) do
+                checktype(r.struct, "", f.type) 
+            end
+        end
+        if type(v.response) == "table" then
+            for tag, f in pairs(v.response) do
+                checktype(r.struct, "", f.type) 
+            end
+        end
+    end
+    return r
+end
+
+local function flattypename(r)
+    for typename, t in pairs(r.struct) do
+        for _, f in pairs(t) do
+            local fullname = checktype(r.struct, typename, f.type)
+            if fullname == nil then
+                error(string.format("Undefined type %s in type %s", f.type, typename))
+            end
+            f.type = fullname
+        end
+    end
+
+    return r
 end
 
 local function adjust(r)
@@ -207,10 +243,14 @@ local function adjust(r)
         local set = result[obj.type]
         local name = obj[1]
         if obj.type == "protocol" then
+            local tag = obj[1]
+            assert(t[tag] == nil , "Redefined protocol id " .. tag)
+            t[tag] = true
             name = obj[2]
-        end  
-        assert(t[name] == nil , "redefined " .. name)
-        t[name] = 0
+        end
+        name = getname(name)
+        assert(t[name] == nil , "Redefined type" .. name)
+        t[name] = true
         set[name] = convert[obj.type](result, obj)
     end
 
@@ -220,11 +260,5 @@ end
 local function parser(text, filename)
     local state = { file = filename, pos = 0, line = 1 }
     local r = lpeg.match(protofile + exception , text , 1, state )
-    return adjust(r)
+    return check_protocol(flattypename(adjust(r)))
 end
-
-local f = assert(io.open("test.proto"), "Can't open sproto file")
-local text = f:read "*a"
-f:close()
-
-parser(text, "test.proto")
