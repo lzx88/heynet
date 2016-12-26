@@ -1,8 +1,4 @@
--- The protocol of zproto
---1.字段tag从1开始
---2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
---3.协议中不允许定义自定义类型，如果有esponse 字段 表示返回包 
-
+local text = 
  field {
     bool integer = 5
     field {
