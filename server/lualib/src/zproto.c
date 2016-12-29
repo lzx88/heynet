@@ -6,103 +6,98 @@
 
 #include "zproto.h"
 
+#define ZT_NUMBER -1
+#define ZT_STRING -2
+#define ZT_BOOL	  -3
+// >0 表示 自定义类型的 tag
+
+#define CHUNK_SIZE 1024
+
 #define ZPROTO_TARRAY 0x80
-#define CHUNK_SIZE 1000
 #define SIZEOF_LENGTH 4
 #define SIZEOF_HEADER 2
 #define SIZEOF_FIELD 2
 
-struct field {
+typedef struct {
+	int curr;
+	int size;
+	void *ptr;
+}memery;
+typedef struct {
 	int tag;
 	int type;
-	const char *name;
-	struct zproto_type *st;
 	int key;
-};
-
-struct zproto_type {
-	const char *name;
-	int n;
-	int base;
-	int maxn;
-	struct field *f;
-};
-
-struct protocol {
-	const char *name;
+	const char name[];
+}field;
+typedef struct {
+	int nf;
+	field *f;
+	const char name[];
+}type, zproto_type;
+typedef struct {
 	int tag;
-	struct zproto_type *p[2];
-};
-
-struct chunk {
-	struct chunk *next;
-};
-
-struct memery {
-	int current_used;
-};
-
-struct zproto {
-	struct memery mem;
-	int type_n;
-	int protocol_n;
-	struct zproto_type *type;
-	struct protocol *proto;
-};
+	int response;
+	int nf;
+	field *f;
+	const char name[];
+}protocol;
+typedef struct {
+	memery mem;
+	int np;
+	protocol *p;
+	int tn;
+	type *t;
+}zproto;
 
 static void
-pool_init(struct memery *p) {
-	p->header = NULL;
-	p->current = NULL;
-	p->current_used = 0;
+pool_init(memery *m) {
+	m->size = 0;
+	m->ptr = NULL;
+	m->curr = 0;
 }
-
 static void
-pool_release(struct memery *p) {
-	struct chunk *tmp = p->header;
-	while (tmp) {
-		struct chunk *n = tmp->next;
-		free(tmp);
-		tmp = n;
-	}
+pool_free(struct memery *m) {
+	if (m->ptr)
+		free(m->ptr);
+	m->size = 0;
+	m->ptr = NULL;
+	m->curr = 0;
 }
-
 static void *
-pool_newchunk(struct memery *p, size_t sz) {
-	struct chunk *t = malloc(sz + sizeof(struct chunk));
-	if (t == NULL)
+pool_enlarge(struct memery *m, size_t sz) {
+	void* tmp = realloc(m->ptr, sz);
+	if (tmp == NULL)
 		return NULL;
-	t->next = p->header;
-	p->header = t;
-	return t+1;
+	m->ptr = tmp;
+	m->size = sz;
+	return m->ptr;
 }
-
-static void *
-pool_alloc(struct memery *p, size_t sz) {
-	// align by 8
-	sz = (sz + 7) & ~7;
-	if (sz >= CHUNK_SIZE) {
-		return pool_newchunk(p, sz);
+static int
+pool_alloc(struct memery *m, size_t sz) {
+	sz = (sz + 3) & ~3;	// align by 4
+	void *result = NULL;
+	if (m->ptr == NULL) {
+		m->size = sz > CHUNK_SIZE ? sz : CHUNK_SIZE;
+		m->ptr = malloc(m->size);
+		result = m->ptr;
 	}
-	if (p->current == NULL) {
-		if (pool_newchunk(p, CHUNK_SIZE) == NULL)
-			return NULL;
-		p->current = p->header;
+	else if (sz > CHUNK_SIZE)
+		result = pool_enlarge(m, m->size + sz);
+	else if (sz + m->curr > m->size)
+		result = pool_enlarge(m, m->size + CHUNK_SIZE);
+	else
+		result = m->ptr + m->curr;
+	int pos = -1;
+	if (result)
+	{
+		pos = m->curr;
+		m->curr += sz;
 	}
-	if (sz + p->current_used <= CHUNK_SIZE) {
-		void *ret = (char *)(p->current+1) + p->current_used;
-		p->current_used += sz;
-		return ret;
-	}
-
-	if (sz >= p->current_used) {
-		return pool_newchunk(p, sz);
-	} else {
-		void *ret = pool_newchunk(p, CHUNK_SIZE);
-		p->current = p->header;
-		p->current_used = sz;
-		return ret;
-	}
+	return pos;
+}
+static void*
+pool_compact(struct memery *m){
+	return pool_enlarge(m, m->curr)
 }
 
 static inline int
@@ -215,7 +210,7 @@ import_field(struct zproto *s, struct field *f, const uint8 *stream) {
 		value = value/2 - 1;
 		switch(tag) {
 		case 1: // buildin
-			if (value >= ZPROTO_TSTRUCT)
+			if (value >= ZT_TYPE)
 				return NULL;	// invalid buildin type
 			f->type = value;
 			break;
@@ -224,7 +219,7 @@ import_field(struct zproto *s, struct field *f, const uint8 *stream) {
 				return NULL;	// invalid type index
 			if (f->type >= 0)
 				return NULL;
-			f->type = ZPROTO_TSTRUCT;
+			f->type = ZT_TYPE;
 			f->st = &s->type[value];
 			break;
 		case 3: // tag
@@ -262,7 +257,7 @@ import_field(struct zproto *s, struct field *f, const uint8 *stream) {
 }
 */
 static const uint8 *
-import_type(struct zproto *s, struct zproto_type *t, const uint8 *stream) {
+import_type(struct zproto *s, struct type *t, const uint8 *stream) {
 	const uint8 *result;
 	uint32 sz = todword(stream);
 	int i;
@@ -310,7 +305,7 @@ import_type(struct zproto *s, struct zproto_type *t, const uint8 *stream) {
 		}
 		last = tag;
 	}
-	t->maxn = maxn;
+	t->nf = maxn;
 	t->base = t->f[0].tag;
 	n = t->f[n-1].tag - t->base + 1;
 	if (n != t->n) {
@@ -412,8 +407,8 @@ create_from_bundle(struct zproto *s, const uint8 *stream, size_t sz) {
 			s->type = pool_alloc(&s->mem, n *sizeof(*s->type));
 		} else {
 			protocoldata = content+SIZEOF_LENGTH;
-			s->protocol_n = n;
-			s->proto = pool_alloc(&s->mem, n *sizeof(*s->proto));
+			s->np = n;
+			s->p = pool_alloc(&s->mem, n *sizeof(*s->p));
 		}
 		content += todword(content) + SIZEOF_LENGTH;
 	}
@@ -424,8 +419,8 @@ create_from_bundle(struct zproto *s, const uint8 *stream, size_t sz) {
 			return NULL;
 		}
 	}
-	for (i=0;i<s->protocol_n;i++) {
-		protocoldata = import_protocol(s, &s->proto[i], protocoldata);
+	for (i=0;i<s->np;i++) {
+		protocoldata = import_protocol(s, &s->p[i], protocoldata);
 		if (protocoldata == NULL) {
 			return NULL;
 		}
@@ -445,17 +440,17 @@ zproto_create(const void *proto, size_t sz) {
 	memset(s, 0, sizeof(*s));
 	s->mem = mem;
 	if (create_from_bundle(s, proto, sz) == NULL) {
-		pool_release(&s->mem);
+		pool_free(&s->mem);
 		return NULL;
 	}
 	return s;
 }
 
 void
-zproto_release(struct zproto *s) {
+zproto_free(struct zproto *s) {
 	if (s == NULL)
 		return;
-	pool_release(&s->mem);
+	pool_free(&s->mem);
 }
 
 void
@@ -468,7 +463,7 @@ zproto_dump(struct zproto *s) {
 	};
 	printf("=== %d types ===\n", s->type_n);
 	for (i=0;i<s->type_n;i++) {
-		struct zproto_type *t = &s->type[i];
+		struct type *t = &s->type[i];
 		printf("%s\n", t->name);
 		for (j=0;j<t->n;j++) {
 			char array[2] = { 0, 0 };
@@ -481,10 +476,10 @@ zproto_dump(struct zproto *s) {
 			}
 			{
 				int t = f->type & ~ZPROTO_TARRAY;
-				if (t == ZPROTO_TSTRUCT) {
+				if (t == ZT_TYPE) {
 					type_name = f->st->name;
 				} else {
-					assert(t<ZPROTO_TSTRUCT);
+					assert(t<ZT_TYPE);
 					type_name = buildin[t];
 				}
 			}
@@ -495,9 +490,9 @@ zproto_dump(struct zproto *s) {
 			}
 		}
 	}
-	printf("=== %d protocol ===\n", s->protocol_n);
-	for (i=0;i<s->protocol_n;i++) {
-		struct protocol *p = &s->proto[i];
+	printf("=== %d protocol ===\n", s->np);
+	for (i=0;i<s->np;i++) {
+		struct protocol *p = &s->p[i];
 		if (p->p[ZPROTO_REQUEST]) {
 			printf("\t%s (%d) request:%s", p->name, p->tag, p->p[ZPROTO_REQUEST]->name);
 		} else {
@@ -512,11 +507,11 @@ zproto_dump(struct zproto *s) {
 
 // query
 int
-zproto_prototag(const struct zproto *sp, const char *name) {
+zproto_prototag(const struct zproto *thiz, const char *name) {
 	int i;
-	for (i=0;i<sp->protocol_n;i++) {
-		if (strcmp(name, sp->proto[i].name) == 0) {
-			return sp->proto[i].tag;
+	for (i=0;i<thiz->np;i++) {
+		if (strcmp(name, thiz->p[i].name) == 0) {
+			return thiz->p[i].tag;
 		}
 	}
 	return -1;
@@ -524,15 +519,15 @@ zproto_prototag(const struct zproto *sp, const char *name) {
 
 static struct protocol *
 query_proto(const struct zproto *sp, int tag) {
-	int begin = 0, end = sp->protocol_n;
-	while(begin<end) {
-		int mid = (begin+end)/2;
-		int t = sp->proto[mid].tag;
+	int begin = 0, end = sp->np;
+	while(begin < end) {
+		int mid = (begin + end) / 2;
+		int t = sp->p[mid].tag;
 		if (t==tag) {
-			return &sp->proto[mid];
+			return &sp->p[mid];
 		}
 		if (tag > t) {
-			begin = mid+1;
+			begin = mid + 1;
 		} else {
 			end = mid;
 		}
@@ -540,7 +535,7 @@ query_proto(const struct zproto *sp, int tag) {
 	return NULL;
 }
 
-struct zproto_type *
+struct type *
 zproto_protoquery(const struct zproto *sp, int proto, int what) {
 	struct protocol *p;
 	if (what <0 || what >1) {
@@ -562,8 +557,8 @@ zproto_protoname(const struct zproto *sp, int proto) {
 	return NULL;
 }
 
-struct zproto_type *
-zproto_type(const struct zproto *sp, const char *type_name) {
+struct type *
+type(const struct zproto *sp, const char *type_name) {
 	int i;
 	for (i=0;i<sp->type_n;i++) {
 		if (strcmp(type_name, sp->type[i].name) == 0) {
@@ -574,12 +569,12 @@ zproto_type(const struct zproto *sp, const char *type_name) {
 }
 
 const char *
-zproto_name(struct zproto_type *st) {
+zproto_name(struct type *st) {
 	return st->name;
 }
 
 static struct field *
-findtag(const struct zproto_type *st, int tag) {
+findtag(const struct type *st, int tag) {
 	int begin, end;
 	if (st->base >=0 ) {
 		tag -= st->base;
@@ -795,7 +790,7 @@ encode_array(zproto_callback cb, struct zproto_arg *args, uint8 *data, int size)
 	size -= SIZEOF_LENGTH;
 	buffer = data + SIZEOF_LENGTH;
 	switch (args->type) {
-	case ZPROTO_TINTEGER: {
+	case ZT_NUMBER: {
 		int noarray;
 		buffer = encode_integer_array(cb,args,buffer,size, &noarray);
 		if (buffer == NULL)
@@ -806,7 +801,7 @@ encode_array(zproto_callback cb, struct zproto_arg *args, uint8 *data, int size)
 		}
 		break;
 	}
-	case ZPROTO_TBOOLEAN:
+	case ZT_BOOL:
 		args->index = 1;
 		for (;;) {
 			int v = 0;
@@ -857,11 +852,11 @@ encode_array(zproto_callback cb, struct zproto_arg *args, uint8 *data, int size)
 }
 
 int
-zproto_encode(const struct zproto_type *st, void *buffer, int size, zproto_callback cb, void *ud) {
+zproto_encode(const struct type *st, void *buffer, int size, zproto_callback cb, void *ud) {
 	struct zproto_arg args;
 	uint8 *header = buffer;
 	uint8 *data;
-	int header_sz = SIZEOF_HEADER + st->maxn *SIZEOF_FIELD;
+	int header_sz = SIZEOF_HEADER + st->nf *SIZEOF_FIELD;
 	int i;
 	int index;
 	int lasttag;
@@ -873,7 +868,7 @@ zproto_encode(const struct zproto_type *st, void *buffer, int size, zproto_callb
 	size -= header_sz;
 	index = 0;
 	lasttag = -1;
-	for (i=0;i<st->n;i++) {
+	for (i=0;i<st->nf;i++) {
 		struct field *f = &st->f[i];
 		int type = f->type;
 		int value = 0;
@@ -889,8 +884,8 @@ zproto_encode(const struct zproto_type *st, void *buffer, int size, zproto_callb
 			args.type = type;
 			args.index = 0;
 			switch(type) {
-			case ZPROTO_TINTEGER:
-			case ZPROTO_TBOOLEAN: {
+			case ZT_NUMBER:
+			case ZT_BOOL: {
 				union {
 					uint64 u64;
 					uint32 u32;
@@ -919,8 +914,8 @@ zproto_encode(const struct zproto_type *st, void *buffer, int size, zproto_callb
 				}
 				break;
 			}
-			case ZPROTO_TSTRUCT:
-			case ZPROTO_TSTRING:
+			case ZT_TYPE:
+			case ZT_STRING:
 				sz = encode_object(cb, &args, data, size);
 				break;
 			}
@@ -957,7 +952,7 @@ zproto_encode(const struct zproto_type *st, void *buffer, int size, zproto_callb
 
 	datasz = data - (header + header_sz);
 	data = header + header_sz;
-	if (index != st->maxn) {
+	if (index != st->nf) {
 		memmove(header + SIZEOF_HEADER + index *SIZEOF_FIELD, data, datasz);
 	}
 	return SIZEOF_HEADER + index *SIZEOF_FIELD + datasz;
@@ -1011,7 +1006,7 @@ decode_array(zproto_callback cb, struct zproto_arg *args, uint8 *stream) {
 	}	
 	stream += SIZEOF_LENGTH;
 	switch (type) {
-	case ZPROTO_TINTEGER: {
+	case ZT_NUMBER: {
 		int len = *stream;
 		++stream;
 		--sz;
@@ -1042,7 +1037,7 @@ decode_array(zproto_callback cb, struct zproto_arg *args, uint8 *stream) {
 		}
 		break;
 	}
-	case ZPROTO_TBOOLEAN:
+	case ZT_BOOL:
 		for (i=0;i<sz;i++) {
 			uint64 value = stream[i];
 			args->index = i+1;
@@ -1051,8 +1046,8 @@ decode_array(zproto_callback cb, struct zproto_arg *args, uint8 *stream) {
 			cb(args);
 		}
 		break;
-	case ZPROTO_TSTRING:
-	case ZPROTO_TSTRUCT:
+	case ZT_STRING:
+	case ZT_TYPE:
 		return decode_array_object(cb, args, stream, sz);
 	default:
 		return -1;
@@ -1061,7 +1056,7 @@ decode_array(zproto_callback cb, struct zproto_arg *args, uint8 *stream) {
 }
 
 int
-zproto_decode(const struct zproto_type *st, const void *data, int size, zproto_callback cb, void *ud) {
+zproto_decode(const struct type *st, const void *data, int size, zproto_callback cb, void *ud) {
 	struct zproto_arg args;
 	int total = size;
 	uint8 *stream;
@@ -1121,7 +1116,7 @@ zproto_decode(const struct zproto_type *st, const void *data, int size, zproto_c
 				}
 			} else {
 				switch (f->type) {
-				case ZPROTO_TINTEGER: {
+				case ZT_NUMBER: {
 					uint32 sz = todword(currentdata);
 					if (sz == sizeof(uint32)) {
 						uint64 v = expand64(todword(currentdata + SIZEOF_LENGTH));
@@ -1140,8 +1135,8 @@ zproto_decode(const struct zproto_type *st, const void *data, int size, zproto_c
 					}
 					break;
 				}
-				case ZPROTO_TSTRING:
-				case ZPROTO_TSTRUCT: {
+				case ZT_STRING:
+				case ZT_TYPE: {
 					uint32 sz = todword(currentdata);
 					args.value = currentdata+SIZEOF_LENGTH;
 					args.length = sz;
@@ -1153,7 +1148,7 @@ zproto_decode(const struct zproto_type *st, const void *data, int size, zproto_c
 					return -1;
 				}
 			}
-		} else if (f->type != ZPROTO_TINTEGER && f->type != ZPROTO_TBOOLEAN) {
+		} else if (f->type != ZT_NUMBER && f->type != ZT_BOOL) {
 			return -1;
 		} else {
 			uint64 v = value;

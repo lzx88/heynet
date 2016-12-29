@@ -4,22 +4,19 @@
 #include <stddef.h>
 
 struct zproto;
-struct zproto_type;
+struct type;
 
 #define ZPROTO_REQUEST 0
 #define ZPROTO_RESPONSE 1
 
-#define ZPROTO_TINTEGER 0
-#define ZPROTO_TBOOLEAN 1
-#define ZPROTO_TSTRING 2
-#define ZPROTO_TSTRUCT 3
+
 
 #define ZPROTO_CB_ERROR -1
 #define ZPROTO_CB_NIL -2
 #define ZPROTO_CB_NOARRAY -3
 
 struct zproto *zproto_create(const void *proto, size_t sz);
-void zproto_release(struct zproto *);
+void zproto_free(struct zproto *);
 
 int zproto_prototag(const struct zproto *, const char *name);
 const char *zproto_protoname(const struct zproto *, int proto);
@@ -36,7 +33,7 @@ struct zproto_arg {
 	const char *tagname;
 	int tagid;
 	int type;
-	struct zproto_type *subtype;
+	struct type *subtype;
 	void *value;
 	int length;
 	int index;	// array base 1
@@ -45,8 +42,8 @@ struct zproto_arg {
 
 typedef int (*zproto_callback)(const struct zproto_arg *args);
 
-int zproto_decode(const struct zproto_type *, const void *data, int size, zproto_callback cb, void *ud);
-int zproto_encode(const struct zproto_type *, void *buffer, int size, zproto_callback cb, void *ud);
+int zproto_decode(const zproto_type *, const void *data, int size, zproto_callback cb, void *ud);
+int zproto_encode(const zproto_type *, void *buffer, int size, zproto_callback cb, void *ud);
 
 // for debug use
 void zproto_dump(struct zproto *);
