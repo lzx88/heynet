@@ -34,13 +34,6 @@ local comment = "--" * (1 - lineend) ^0 * (lineend + eof)
 local dummy = (S" \t" + lineend + comment)^0
 local newline = (blank0 * (lineend + comment) * blank0)^1
 
-<<<<<<< HEAD
-=======
-local function namedpat(name, pat)
-    return Ct(Cg(Cc(name), "type") * pat)
-end
-
->>>>>>> ff7f24ae1f9a9c00453381adc121fc32bbff69ad
 local function blankpat(pat)
     return blank0 * pat * blank0
 end
