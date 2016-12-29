@@ -280,6 +280,7 @@ end
 function parser(text, filename)
     local state = { file = filename, pos = 0, line = 1 }
     local r = lpeg.match(protofile + exception , text , 1, state )
+    dump(r)
     return link(check(adjust(r)))
 end
 
