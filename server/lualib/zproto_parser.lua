@@ -153,16 +153,7 @@ local function adjust(r)
     local t = {}
     for _, obj in ipairs(r) do
         local set = all[obj.type]
-        local name = obj[1]
-        if obj.type == "protocol" then
-            local tag = obj[1]
-            assert(t[tag] == nil , "Redefined protocol id " .. tag)
-            t[tag] = true
-            name = obj[2]
-        end
-        name = checkname(name)
-        assert(t[name] == nil , "Redefined type" .. name)
-        t[name] = true
+        dump(obj)
         set[name] = convert[obj.type](obj)
     end
     return all
@@ -185,8 +176,8 @@ local function link()
     end
     local function linkfield(f)
         if f.key and f.key ~= "[]" then
-            dump(f)
-            dump(all.struct[f.type])
+            --dump(f)
+            --dump(all.struct[f.type])
             f.key = all.struct[f.type].field[f.key].tag 
         end
         if not buildin[f.type] then

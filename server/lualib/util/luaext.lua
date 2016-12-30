@@ -76,7 +76,6 @@ function val2str(arg1, arg2)
     local str = ""
     local tab = 1
     local function _2str(v, k, n)
-        print(v, k)
         for i = 1, n do
             str = str .. "  "
         end
