@@ -76,12 +76,17 @@ function val2str(arg1, arg2)
     local str = ""
     local tab = 1
     local function _2str(v, k, n)
+        print(v, k)
         for i = 1, n do
             str = str .. "  "
         end
         k = k and k .. ' = ' or ""
         local t = type(v)
         if t == "table" then
+            if not next(v) then
+                str = str .. k .. (n == tab and "{}" or "{}\n")
+                return
+            end
             str = str .. k .. "{\n"
             n = n + 1
             local s = 0
@@ -90,7 +95,7 @@ function val2str(arg1, arg2)
                 s = k_
             end
             for k_,v_ in pairs(v) do
-                if type(k_) == "number" and k_ > s then _2str(v_, k_, n) end
+                if type(k_) == "number" and (k_ > s or k_ < 1) then _2str(v_, k_, n) end
             end
             for k_,v_ in pairs(v) do
                 if type(k_) ~= "number" then _2str(v_, k_, n) end
@@ -100,6 +105,8 @@ function val2str(arg1, arg2)
                 str = str .. "  "
             end
             str = str .. (n == tab and "}" or "}\n")
+        elseif t == "nil" then
+            str = str .. k .. "nil\n"
         elseif t == "string" then
             str = str .. k .. "\"" .. v .. "\"\n"
         elseif t == "number" then
