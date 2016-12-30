@@ -9,7 +9,7 @@ type{
 --2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
     field {
         string name     =1
-        number buildin = 2
+        number ss = 2
         number[] type  = 3
         number tag     =4
         bool integer = 5

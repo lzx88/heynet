@@ -273,14 +273,12 @@ local function adjust(r)
         t[name] = true
         set[name] = convert[obj.type](result, obj)
     end
-    dump(result)
     return result
 end
 
 function parser(text, filename)
     local state = { file = filename, pos = 0, line = 1 }
     local r = lpeg.match(protofile + exception , text , 1, state )
-    dump(r)
     return link(check(adjust(r)))
 end
 
