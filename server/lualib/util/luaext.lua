@@ -79,7 +79,7 @@ function val2str(arg1, arg2)
         for i = 1, n do
             str = str .. "  "
         end
-        k = k and k .. ' = ' or ""
+        k = k and tostring(k) .. ' = ' or ""
         local t = type(v)
         if t == "table" then
             if not next(v) then
@@ -104,13 +104,9 @@ function val2str(arg1, arg2)
                 str = str .. "  "
             end
             str = str .. (n == tab and "}" or "}\n")
-        elseif t == "nil" then
-            str = str .. k .. "nil\n"
         elseif t == "string" then
             str = str .. k .. "\"" .. v .. "\"\n"
-        elseif t == "number" then
-            str = str .. k .. v .. "\n"
-        elseif t == "function" or t == "boolean" then
+        elseif t == "nil" or t == "number" or t == "function" or t == "boolean" then
             str = str .. k .. tostring(v) .. "\n"
         else
             assert(false)

@@ -72,7 +72,7 @@ local function checktype(ptype, t)
         return t
     end
 end
-local convert = {_ss = 0 }
+local convert = {}
 function convert.field(repeats, p, typename)
     local f = { type = p[1], name = p[2], tag = p[3] }
     if p[4] then
@@ -81,22 +81,21 @@ function convert.field(repeats, p, typename)
         f.tag = p[4]
     end
     f.name = checkname(f.name)
-    assert(not repeats[f.tag], "Redefined tag in ".. typename ..".".. f.name)
-    assert(not repeats[f.name], "Redefined name in ".. typename ..".".. f.name)
+    assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name)
+    assert(not repeats[f.name], "Redefined name in type:".. typename ..".".. f.name)
     repeats[f.tag] = true
     repeats[f.name] = true
     f.type = checktype(typename, f.type)
     assert(f.type, "Undefined type["..p[1].."] in field[".. typename ..".".. f.name.."].")
 
     if f.key and f.key ~= "[]" then
-        assert(not buildin[f.type] and all.struct[f.type] and all.struct[f.type][f.key], "Undefined map key: "..f.key.." in field: "..typename.."."..f.name)
+        assert(not buildin[f.type] and all.struct[f.type] and all.struct[f.type][f.key], "Undefined map key:"..f.key.." in field:"..typename.."."..f.name)
     end
 
     return f
 end
 function convert.struct(obj)
-    convert._ss = convert._ss + 1
-    local result = { name = checkname(obj[1]), field = {}, sort = convert._ss }
+    local result = { name = checkname(obj[1]), field = {}}
     local tags = {}
     local names = {}
 
@@ -109,7 +108,7 @@ function convert.struct(obj)
                 assert(f.type == "struct")    -- nest type
                 local nesttypename = result.name .. "." .. checkname(f[1])
                 f[1] = nesttypename
-                assert(all.struct[nesttypename] == nil, "Redefined " .. nesttypename)
+                assert(all.struct[nesttypename] == nil, "Redefined type:" .. nesttypename)
                 all.struct[nesttypename] = convert.struct(f)
             end
         end
@@ -132,7 +131,7 @@ function convert.protocol(obj)
     if field then
         local t = {}
         for _, p in ipairs(field) do
-            local f = convert.field(all, t, p, result.name)
+            local f = convert.field(t, p, result.name)
             result.field[f.name] = f
         end
     end
@@ -140,7 +139,7 @@ function convert.protocol(obj)
     if response then
         if "table" == type(response[1]) then
             result.response = result.name ..".response"
-            local rsp = convert.struct(all,  {result.response, response[1]})
+            local rsp = convert.struct{result.response, response[1]}
             all.struct[rsp.name] = rsp
         else
             result.response = response[1]
@@ -152,17 +151,15 @@ end
 local function adjust(r)
     local t = {}
     for _, obj in ipairs(r) do
-        local set = all[obj.type]
-        dump(obj)
-        set[name] = convert[obj.type](obj)
+        local result = convert[obj.type](obj)
+        all[obj.type][result.name] = result
     end
-    return all
 end
 
 
 local function link()
     local taginc = 0
-    local function gentypetag(t)
+    local function gentypetag(t, T)
         if buildin[t] then
             return buildin[t]
         else
@@ -170,76 +167,63 @@ local function link()
             if not all.struct[t].tag then
                 taginc = taginc + 1
                 all.struct[t].tag = taginc
+                T[taginc] = all.struct[t]
             end
             return all.struct[t].tag
         end
     end
-    local function linkfield(f)
+    local function linkfield(f, T)
+        if type(f.type) == "number" then
+            return
+        end
         if f.key and f.key ~= "[]" then
-            --dump(f)
-            --dump(all.struct[f.type])
-            f.key = all.struct[f.type].field[f.key].tag 
+            local keyf = all.struct[f.type].field[f.key]
+            assert((type(keyf.type) == "number" and keyf.type < 0) or buildin[keyf.type], "Map key:"..f.key.." must be buildin type")
+            f.key = keyf.tag
         end
         if not buildin[f.type] then
-            local fs = {}
             for _,f in pairs(all.struct[f.type].field) do
-                --dump(f)
-                linkfield(f)
-                fs[name] = f
-                f.name = nil
-            end
-            all.struct[f.type].field = fs
+                linkfield(f, T)
+            end            
         end
-        f.type = gentypetag(f.type)
+        f.type = gentypetag(f.type, T)
     end
 
     local result = { P = {}, T = {} }
 
     local tmp = {}
     for _,p in pairs(all.protocol) do
-        table.insert(tmp, p)
-    end
-    table.sort(tmp, function (a, b) return a.tag < b.tag end)--sort 只支持数组排序
-    for _,p in pairs(tmp) do
         local fs = {}
         for name, f in pairs(p.field) do
-            linkfield(f)
-            fs[name] = f
-            f.name = nil
+            linkfield(f, tmp)
+            fs[f.tag] = f
+            f.tag = nil
         end
         p.field = fs
 
         if p.response then
             assert(type(p.response) == "string")
-            p.response = gentypetag(p.response)
+            p.response = gentypetag(p.response, tmp)
         end
 
         result.P[tostring(p.tag)] = p
         p.tag = nil
     end
-
-    local tmp = {}
-    for _,t in pairs(all.struct) do
-        table.insert(tmp, t)
+    for _,t in pairs(tmp) do
+        for fname, f in pairs(t.field) do
+            linkfield(f, result.T)
+        end
+        result.T[t.tag] = t
     end
 
-    table.sort(tmp, function (a, b) return a.sort < b.sort end)--sort 只支持数组排序
-    for _,t in pairs(tmp) do
-        t.sort = nil
-            
-        if t.tag then
-            local fs = {}
-            for fname, f in pairs(t.field) do
-                linkfield(f)
-                fs[name] = f
-                f.name = nil
-            end
-            t.field = fs
---            dump(t)
-
-            result.T[t.tag] = t
-            t.tag = nil
+    for _,t in pairs(result.T) do
+        t.tag = nil
+        local fs = {}
+        for fname, f in pairs(t.field) do
+            fs[f.tag] = f
+            f.tag = nil
         end
+        t.field = fs
     end
     all = nil
     return result

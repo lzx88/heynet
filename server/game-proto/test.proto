@@ -4,27 +4,30 @@
 --3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
 --4.内建关键字为 number, string, bool, response 不允许作为 字段name
 --5.自定义类型可以内嵌自定义类型
-tdype{
-}
+
 type{
 --2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
     field {
-        string name     =1
-        number ss = 2
+        number name = 1
         number[] type  = 3
-        number tag     =4
     }
-    field[name] fields  =2
+        nest3 {
+          field[] type  = 3
+        }  
+          field[name] fields  =2
 }
 --2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
 
-0=protocol{
+0=p0{
+    type.field nnn     =2
+
+    string name     =1
     response {
       type index     = 1
     }
 }
 
-1 = roup {
+1 = p1 {
     response = type.field
 }
 
