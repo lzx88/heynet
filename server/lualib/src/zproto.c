@@ -9,7 +9,7 @@
 #define ZT_NUMBER -1
 #define ZT_STRING -2
 #define ZT_BOOL	  -3
-// >0 ±íÊ¾ ×Ô¶¨ÒåÀàÐÍµÄ tag
+// >0 è‡ªå®šä¹‰ç±»åž‹ tag
 
 #define CHUNK_SIZE 1024
 

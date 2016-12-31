@@ -204,8 +204,7 @@ local function link()
             assert(type(p.response) == "string")
             p.response = gentypetag(p.response, tmp)
         end
-
-        result.P[tostring(p.tag)] = p
+        result.P[p.tag] = p
         p.tag = nil
     end
     for _,t in pairs(tmp) do
@@ -231,7 +230,7 @@ end
 local parser = {}
 function parser.parse(text, filename)
     local state = { file = filename, pos = 0, line = 1 }
-    local r = lpeg.match(protofile + exception , text , 1, state )
+    local r = lpeg.match(protofile + exception, text, 1, state )
     return link(adjust(r))
 end
 
