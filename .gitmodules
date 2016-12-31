@@ -3,3 +3,6 @@
 [submodule "server/skynet"]
 	path = server/skynet
 	url = https://github.com/cloudwu/skynet.git
+[submodule "server/client-simple/lsocket"]
+	path = server/client-simple/lsocket
+	url = https://github.com/cloudwu/lsocket.git
