@@ -156,7 +156,6 @@ local function adjust(r)
     end
 end
 
-
 local function link()
     local taginc = 0
     local function gentypetag(t, T)
@@ -229,11 +228,14 @@ local function link()
     return result
 end
 
-function parser(text, filename)
+local parser = {}
+function parser.parse(text, filename)
     local state = { file = filename, pos = 0, line = 1 }
     local r = lpeg.match(protofile + exception , text , 1, state )
     return link(adjust(r))
 end
+
+return parser
 
 
 --[[
