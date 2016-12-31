@@ -237,12 +237,16 @@ end
 
 
 --[[
--- The protocol of zproto
---1.字段tag从1开始
---2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
---3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
---4.内建关键字为 number, string, bool, response 不允许作为 字段name
---5.自定义类型可以内嵌自定义类型
+The protocol of zproto
+1.字段tag从1开始
+2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
+3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
+4.内建类型为 数字 number, 字符串 string, 布尔值 bool, 一个关键字 response 不允许作为 字段name
+5.自定义类型可以内嵌自定义类型
+6.只支持行注释
+]]
+
+--[[uage
 type{
     string name = 1
     field {
