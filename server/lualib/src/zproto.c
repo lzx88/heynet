@@ -14,39 +14,39 @@
 #define CHUNK_SIZE 1024
 #define SIZEOF_LENGTH 2
 
-typedef struct {
+struct memery{
 	int curr;
 	int size;
 	void *ptr;
-}memery;
-typedef struct {
+};
+struct field{
 	int tag;
 	int type;
 	int key;
 	const char name[];
-}field;
-typedef struct {
+};
+struct type{
 	int nf;
-	field *f;
+	struct field *f;
 	const char name[];
-}type, zproto_type;
-typedef struct {
+};
+struct protocol{
 	int tag;
 	int response;
 	int nf;
-	field *f;
+	struct field *f;
 	const char name[];
-}protocol;
-typedef struct {
-	memery mem;
+};
+struct zproto{
+	struct memery mem;
 	int np;
-	protocol *p;
+	struct protocol *p;
 	int tn;
-	type *t;
-}zproto;
+	struct type *t;
+};
 
 static void
-pool_init(memery *m) {
+pool_init(struct memery *m) {
 	m->size = 0;
 	m->ptr = NULL;
 	m->curr = 0;

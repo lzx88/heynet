@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 struct zproto;
-struct type;
+typedef struct type zproto_type;
 
 #define ZPROTO_REQUEST 0
 #define ZPROTO_RESPONSE 1
