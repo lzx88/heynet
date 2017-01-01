@@ -9,7 +9,7 @@ local V = lpeg.V
 
 
 local exception = lpeg.Cmt(lpeg.Carg(1), function (_, pos, state)
-    error(string.format("syntax error at file %s:%d!", state.file or "", state.line))
+    error(string.format("syntax error at protocol file %s:%d!", state.file or "", state.line))
     return pos
 end)
 local function count_lines(_, pos, state)
@@ -50,13 +50,12 @@ local protocol = P {
 }
 local protofile = dummy * protocol * dummy * eof
 
-local all = { struct = {} , protocol = {} }
 local buildin = { number = -1, string = -2, bool = -3, response = "response"}
 local function checkname(str)
     assert(not buildin[str], "Buildin type: ".. str .." cann't be use for name!")
     return str
 end
-local function checktype(ptype, t)
+local function checktype(all, ptype, t)
     if buildin[t] then
        assert(t ~= "response", "Buildin type: response cann't be use for typename!")
        return t
@@ -67,13 +66,13 @@ local function checktype(ptype, t)
     end
     ptype = ptype:match "(.+)%..+$"
     if ptype then
-        return checktype(ptype, t)
+        return checktype(all, ptype, t)
     elseif all.struct[t] then
         return t
     end
 end
 local convert = {}
-function convert.field(repeats, p, typename)
+function convert.field(all, repeats, p, typename)
     local f = { type = p[1], name = p[2], tag = p[3] }
     if p[4] then
         f.key = p[2]
@@ -85,7 +84,7 @@ function convert.field(repeats, p, typename)
     assert(not repeats[f.name], "Redefined name in type:".. typename ..".".. f.name)
     repeats[f.tag] = true
     repeats[f.name] = true
-    f.type = checktype(typename, f.type)
+    f.type = checktype(all, typename, f.type)
     assert(f.type, "Undefined type["..p[1].."] in field[".. typename ..".".. f.name.."].")
 
     if f.key and f.key ~= "[]" then
@@ -94,7 +93,7 @@ function convert.field(repeats, p, typename)
 
     return f
 end
-function convert.struct(obj)
+function convert.struct(all, obj)
     local result = { name = checkname(obj[1]), field = {}}
     local tags = {}
     local names = {}
@@ -102,21 +101,21 @@ function convert.struct(obj)
     if obj[2] then
         for _, f in ipairs(obj[2]) do
             if f.type == "field" then
-                local r = convert.field(tags, f, result.name)
+                local r = convert.field(all, tags, f, result.name)
                 result.field[r.name] = r
             else
                 assert(f.type == "struct")    -- nest type
                 local nesttypename = result.name .. "." .. checkname(f[1])
                 f[1] = nesttypename
                 assert(all.struct[nesttypename] == nil, "Redefined type:" .. nesttypename)
-                all.struct[nesttypename] = convert.struct(f)
+                all.struct[nesttypename] = convert.struct(all, f)
             end
         end
     end
 
     return result
 end
-function convert.protocol(obj)
+function convert.protocol(all, obj)
     local result = {tag = obj[1], name = checkname(obj[2]), field = {}}
     local response = obj[4]
     local field = nil
@@ -131,7 +130,7 @@ function convert.protocol(obj)
     if field then
         local t = {}
         for _, p in ipairs(field) do
-            local f = convert.field(t, p, result.name)
+            local f = convert.field(all, t, p, result.name)
             result.field[f.name] = f
         end
     end
@@ -139,7 +138,7 @@ function convert.protocol(obj)
     if response then
         if "table" == type(response[1]) then
             result.response = result.name ..".response"
-            local rsp = convert.struct{result.response, response[1]}
+            local rsp = convert.struct(all, {result.response, response[1]})
             all.struct[rsp.name] = rsp
         else
             result.response = response[1]
@@ -149,15 +148,17 @@ function convert.protocol(obj)
     return result
 end
 local function adjust(r)
+    local all = { struct = {} , protocol = {} }
     local t = {}
     for _, obj in ipairs(r) do
-        local result = convert[obj.type](obj)
+        local result = convert[obj.type](all, obj)
         all[obj.type][result.name] = result
     end
+    return all
 end
 
-local function link()
-    local taginc = 0
+local function link(all, result, fname)
+    local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
             return buildin[t]
@@ -187,8 +188,8 @@ local function link()
         end
         f.type = gentypetag(f.type, T)
     end
+    fname = fname and fname .. "." or ""
 
-    local result = { P = {}, T = {} }
 
     local tmp = {}
     for _,p in pairs(all.protocol) do
@@ -204,38 +205,32 @@ local function link()
             assert(type(p.response) == "string")
             p.response = gentypetag(p.response, tmp)
         end
+        p.name = fname .. p.name
+        assert(not result.P[p.tag], "Redefined protocol no." .. p.tag)
         result.P[p.tag] = p
         p.tag = nil
     end
     for _,t in pairs(tmp) do
-        for fname, f in pairs(t.field) do
+        for _, f in pairs(t.field) do
             linkfield(f, result.T)
         end
         result.T[t.tag] = t
     end
 
     for _,t in pairs(result.T) do
-        t.tag = nil
-        local fs = {}
-        for fname, f in pairs(t.field) do
-            fs[f.tag] = f
-            f.tag = nil
+        if t.tag then
+            t.tag = nil
+            local fs = {}
+            for _, f in pairs(t.field) do
+                fs[f.tag] = f
+                f.tag = nil
+            end
+            t.field = fs
         end
-        t.field = fs
     end
     all = nil
     return result
 end
-
-local parser = {}
-function parser.parse(text, filename)
-    local state = { file = filename, pos = 0, line = 1 }
-    local r = lpeg.match(protofile + exception, text, 1, state )
-    return link(adjust(r))
-end
-
-return parser
-
 
 --[[
 The protocol of zproto
@@ -272,3 +267,27 @@ type{
     response = type.field
 }
 ]]
+
+
+local parser = {}
+
+function parser.parse(text, filename, result)
+    if not result then result = { T = {}, P = {} } end
+    local state = { file = filename, pos = 0, line = 1 }
+    local r = lpeg.match(protofile + exception, text, 1, state )
+    local fnamepat = ((P(1) - (P"/" + "\\"))^0 * (P"/" + "\\")^1)^0 * C(word) * (P"." * (alpha + alnum)^0)^0
+    return link(adjust(r), result, fnamepat:match(filename))
+end
+
+function parser.fparse(tbl)
+    local result = { T = {}, P = {} }
+    for _,path in pairs(tbl) do
+        local f = assert(io.open(path), "Can't open sproto file:" .. path)
+        local text = f:read "*a"
+        f:close()
+        parser.parse(text, path, result)
+    end
+    return result
+end
+
+return parser

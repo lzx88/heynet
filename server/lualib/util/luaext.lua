@@ -106,7 +106,7 @@ function val2str(arg1, arg2)
             str = str .. (n == tab and "}" or "}\n")
         elseif t == "string" then
             str = str .. k .. "\"" .. v .. "\"\n"
-        elseif t == "nil" or t == "number" or t == "function" or t == "boolean" then
+        elseif t == "nil" or "number" or "function" or "boolean" or "userdata" then
             str = str .. k .. tostring(v) .. "\n"
         else
             assert(false)

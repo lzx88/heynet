@@ -1,0 +1,23 @@
+type1{
+    string name = 1
+    field {
+        string name     =1
+        number buildin = 2
+        number[] type  = 3
+        number tag     =4
+        bool integer = 5
+    }
+    field[name] fields  =2
+}
+
+202=protocol{
+    string name         =   1--fdfsdf
+    number buildin     = 2--fdfsdf
+    response {
+      number index     = 1
+    }
+}
+
+2122 = roup {
+    response = type1.field
+}
