@@ -206,7 +206,7 @@ local function link(all, result, fname)
             p.response = gentypetag(p.response, tmp)
         end
         p.name = fname .. p.name
-        assert(not result.P[p.tag], "Redefined protocol no." .. p.tag)
+        assert(not result.P[p.tag], "Redefined protocol no. " .. p.tag)
         result.P[p.tag] = p
         p.tag = nil
     end
