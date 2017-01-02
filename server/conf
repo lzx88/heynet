@@ -1,5 +1,5 @@
 root = "$ROOT/"
-include "config_server" 
+include "conf.server" 
 
 thread = 8
 logpath = root .. "run"

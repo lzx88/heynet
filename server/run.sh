@@ -15,4 +15,4 @@ do
 	esac
 done
 
-$ROOT/skynet/skynet $ROOT/config
+$ROOT/skynet/skynet $ROOT/conf

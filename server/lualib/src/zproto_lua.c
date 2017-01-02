@@ -666,14 +666,14 @@ luaopen_zproto_core(lua_State *L) {
 	luaL_checkversion(L);
 #endif
 	luaL_Reg l[] = {
-		{ "newproto", lnewproto },
-		{ "deleteproto", ldeleteproto },
-		{ "dumpproto", ldumpproto },
-		{ "querytype", lquerytype },
+		{ "create", lcreate },
+		{ "delete", ldeleteproto },
+		{ "dump", ldumpproto },
+		{ "query", lquerytype },
 		{ "decode", ldecode },
 		{ "protocol", lprotocol },
-		{ "loadproto", lloadproto },
-		{ "saveproto", lsaveproto },
+		{ "load", lload },
+		{ "save", lsave },
 		{ "default", ldefault },
 		{ NULL, NULL },
 	};

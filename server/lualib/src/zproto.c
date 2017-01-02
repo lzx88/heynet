@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
-#include "types.h"
+#include "msvcint.h"
 
 #include "zproto.h"
 
@@ -11,8 +11,8 @@
 #define ZT_BOOL	  -3
 // >0 自定义类型 tag
 
-#define CHUNK_SIZE 1024
-#define SIZEOF_LENGTH 2
+#define CHUNK_SIZE 0x100000 //1M
+#define LEN_SIZE 4
 
 struct memery{
 	int curr;
@@ -116,11 +116,11 @@ static char test_endian(){
 
 #pragma pack(1)
 struct header{
-	const char[7] magic = "Z-PROTO";
-	const char bendian;
-	uint16 nbytes;
-	uint16 msgid;
-	uint32 session;
+	const char[8] magic = "Z-PROTO8";
+	const char endian = test_endian() == 'L'? 0 : 'B';
+	char[3] nbytes;//包体字节数 最大15M
+	uint16 msgid;//消息ID
+	uint32 session;//会话标识
 };
 #pragma pack()
 
@@ -130,7 +130,7 @@ struct zstruct{
 	uint16 n;//数据个数
 	uint16* tags;//n个字段的标签
 	uint32* nums;//n个字段的数据
-	char* data;//数据块 头两字节为长度
+	char data[];//数据块 头4字节为长度
 };
 
 void write_buf(char* buf, char* data, size_t len){
@@ -160,20 +160,15 @@ void write_string(char* buf, char* cstr){
 	write_buf(buf, cstr, len + 1);
 }
 
-
-void write_header(header* head, char* buf){
-	write_buf(buf, head, sizeof(*head));
-}
-
 void write_struct(zstruct* content, char* buf){
 	write_buf(buf, content->n, sizeof(content->n));
 	write_tag(buf + 2, content->n, sizeof(content->n));
 
 }
 
-void write_message(message* msg, char* buf, size_t s){
-	write_header(msg->head, buf);
-	write_struct(msg->content, buf);
+void write_message(char* buf, size_t s, message* msg){
+	write_buf(buf, msg->head, sizeof(msg->head));
+	write_struct(buf, msg->content);
 }
 
 uint16 read_tag(char* buf){
