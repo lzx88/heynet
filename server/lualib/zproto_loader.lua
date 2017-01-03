@@ -1,5 +1,14 @@
-require "./util/luaext"
-local zp = require "./zproto_parser"
+local core = require "zproto.core"
+local parser = require "zproto_parser"
 
-local protocol = zp.fparse{"../.proto/test.proto"}
-dump(protocol)
+local loader = {}
+
+function loader.load(path)
+	local tmp = {}
+	io.loopfile(path, function(p)
+		table.insert(tmp, p)
+	end)
+	local proto = parser.fparse(tmp)
+	assert(proto)
+	local zp = core.create(proto)
+end

@@ -1,0 +1,32 @@
+--include("config_server")--todo 单独配置文件
+2.需要将请求回应模式的每条的返回错误码 从协议取出来
+3.将协议文件夹proto 从server分出去 和客户端共享 
+	修改protoloader服务的协议加载路径 并且路径由config_server配置
+
+4.sproto协议分模块方案
+--[[
+.package {
+	type 0 : integer
+	session 1 : integer
+	ud 2 : string
+}
+]]
+将以上协议头硬编码入代码
+
+每个模块分成 两个文件 role.csc 与 role.sc
+protoloader 通过加载协议路径"./proto"，
+将所有csc 和 协议头 组一起 写入slot1
+将所有csc 和 协议头 组一起 写入slot1
+
+将自增协议号 用 $INC$ 代替 在 协议整合的时候自增量代替
+并检查协议是否重名
+
+
+
+5.池的概念抽出公共逻辑
+
+6.bat脚本处理linux业务代码更新
+
+7.让protoloader服务自行退出
+
+1.服务器配置分离  ok
