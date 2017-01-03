@@ -1,4 +1,4 @@
-logic_root = root.."logic/"
+logic_root = root.."service/logic/"
 logic_path = logic_root.."?.lua;"..logic_root.."agent/?.lua;"..logic_root.."center/?.lua;"..logic_root.."scene/?.lua;"..logic_root.."db/?.lua;"
 
 --服务器索引
@@ -7,7 +7,7 @@ server_idx = 0
 agent_pool_init = 2
 
 config_path = root .. ".config/*.cfg"
-proto_path = root .. ".proto/"
+proto_path = root .. ".proto/*.proto"
 
 gate_port = server_idx .. 5678 
 debug_port = server_idx .. 8000
