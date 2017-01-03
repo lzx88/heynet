@@ -1,0 +1,18 @@
+{
+	"1":{
+		"id":1,
+		"sex":1,
+		"name":"森屿初夏ㄨ",
+		"level":6,
+		"kb":4396,
+		"head_url":"http://ktv.mobile.kugou.com/Assets/robot_head/robot(1).jpg",
+	},
+	"2":{
+		"id":2,
+		"sex":1,
+		"name":"ぐ南笙北执▼",
+		"level":1,
+		"kb":1703,
+		"head_url":"http://ktv.mobile.kugou.com/Assets/robot_head/robot(2).jpg",
+	},
+}
