@@ -61,10 +61,24 @@ static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isnum) {
 #endif
 
 static int
-lnewproto(lua_State *L) {
+lcreate(lua_State *L) {
+	t_idx = lua_gettop(L);
+	lua_pushnil(L);
+
+	while (lua_next(L, t_idx))
+	{
+		printf("============================\n");
+		it_idx = lua_gettop(L);
+		lua_pushnil(L);
+		while (lua_next(L, it_idx))
+		{
+			printf("%s\n", lua_tostring(L, -1));
+			lua_pop(L, 1);
+		}
+		lua_pop(L, 1);
+	}
 	struct zproto *sp;
-	size_t sz;
-	void *buffer = (void *)luaL_checklstring(L,1,&sz);
+
 	sp = zproto_create(buffer, sz);
 	if (sp) {
 		lua_pushlightuserdata(L, sp);
@@ -684,41 +698,4 @@ luaopen_zproto_core(lua_State *L) {
 	return 1;
 }
 
-    /********************************************************************
-    	created:	2014/12/16
-    	filename:	luahelper.h
-    	version:	1.0
-    	purpose:	一些辅助宏 by z
-    *********************************************************************/
-    #ifndef luahelper_h__
-    #define luahelper_h__
-     
-    #include "LUAEngine.h"
-     
-    class ZLuaHelper
-    {
-    private:
-    	lua_State* L;
-    	int i;
-    public:
-    	bool check(){return i-- > 0;}
-    	ZLuaHelper(lua_State* ls)
-    		:L(ls),i(1){}
-    	~ZLuaHelper() {lua_pop(L, 1);}
-    };
-     
-    template<typename T>
-    inline void luaGetData(lua_State* L, int idx, T& val) { val = (T)lua_tointeger(L, idx);}
-    template<>
-    inline void luaGetData<string>(lua_State* L, int idx, string& val){ val = lua_tostring(L, idx);}
-    template<>
-    inline void luaGetData<const char*>(lua_State* L, int idx, const char*& val){ val = lua_tostring(L, idx);}
-    inline void luaGetField(lua_State* L, int idx, int k) { lua_rawgeti(L, idx, k);}
-    inline void luaGetField(lua_State* L, int idx, const char* k) { lua_getfield(L, idx, k);}
-     
-    #define IF_GetLuaTaByIdx(L, k, idx) luaGetField(L, idx, k); for(ZLuaHelper hel(L); hel.check() && !lua_isnil(L, -1) && lua_istable(L, -1);)
-    #define IF_GetLuaTab(L, k) IF_GetLuaTaByIdx(L, k, -1)
-    #define For_LuaTab(L)  for(lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1))
-    #define GetLuaTabMember(L, k, val) luaGetField(L, -1, k); luaGetData(L, -1, val); lua_pop(L, 1)
-     
-    #endif//luahelper_h__
+
