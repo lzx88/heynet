@@ -1,5 +1,5 @@
-logic_root = root.."service/logic/"
-game_lua_path = logic_root.."?.lua;"..logic_root.."agent/?.lua;"..logic_root.."center/?.lua;"..logic_root.."scene/?.lua;"..logic_root.."db/?.lua;"
+logic_root = root.."logic/"
+logic_path = logic_root.."?.lua;"..logic_root.."agent/?.lua;"..logic_root.."center/?.lua;"..logic_root.."scene/?.lua;"..logic_root.."db/?.lua;"
 
 --服务器索引
 server_idx = 0
