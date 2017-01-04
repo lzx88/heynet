@@ -15,7 +15,7 @@ typedef struct type zproto_type;
 #define ZPROTO_CB_NIL -2
 #define ZPROTO_CB_NOARRAY -3
 
-struct zproto *zproto_create(const void *proto, size_t sz);
+struct zproto *zproto_alloc(const void *proto, size_t sz);
 void zproto_free(struct zproto *);
 
 int zproto_prototag(const struct zproto *, const char *name);

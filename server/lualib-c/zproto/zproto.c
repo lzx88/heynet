@@ -20,26 +20,24 @@ struct memery{
 	void *ptr;
 };
 struct field{
+	const char *name;
 	int tag;
 	int type;
 	int key;
-	const char name[];
 };
 struct type{
-	int nf;
+	const char *name;
+	int n;
 	struct field *f;
-	const char name[];
 };
 struct protocol{
 	int tag;
+	int request;
 	int response;
-	int nf;
-	struct field *f;
-	const char name[];
 };
 struct zproto{
 	struct memery mem;
-	int np;
+	int pn;
 	struct protocol *p;
 	int tn;
 	struct type *t;
@@ -68,32 +66,98 @@ pool_enlarge(struct memery *m, size_t sz) {
 	m->size = sz;
 	return m->ptr;
 }
-static int
+static void *
 pool_alloc(struct memery *m, size_t sz) {
 	sz = (sz + 3) & ~3;	// align by 4
-	void *result = NULL;
 	if (m->ptr == NULL) {
 		m->size = sz > CHUNK_SIZE ? sz : CHUNK_SIZE;
 		m->ptr = malloc(m->size);
-		result = m->ptr;
+		return m->ptr;
 	}
-	else if (sz > CHUNK_SIZE)
+	void *result = NULL;
+	if (sz > CHUNK_SIZE)
 		result = pool_enlarge(m, m->size + sz);
 	else if (sz + m->curr > m->size)
 		result = pool_enlarge(m, m->size + CHUNK_SIZE);
 	else
-		result = m->ptr + m->curr;
-	int pos = -1;
+		result = m->ptr;
 	if (result)
 	{
-		pos = m->curr;
+		result += m->curr;
 		m->curr += sz;
 	}
-	return pos;
+	return result;
 }
-static void*
-pool_compact(struct memery *m){
-	return pool_enlarge(m, m->curr)
+
+struct zproto *
+zproto_alloc(){
+	struct memery m;
+	pool_init(&m);
+	zproto* thiz = pool_alloc(&m, sizeof(*thiz));
+	thiz->mem = m;
+	thiz->pn = 0;
+	thiz->p = NULL;
+	thiz->tn = 0;
+	thiz->t = NULL;
+	return thiz;
+}
+
+bool
+zproto_done(struct zproto *thiz){
+	void *base = thiz;
+	thiz = pool_enlarge(&thiz->mem, thiz->mem.curr);
+	if (thiz == NULL)
+		return false;
+	int offset = base - thiz;
+	thiz->p += offset;
+	thiz->t += offset;
+	for (int i = 0; i < thiz->tn; ++i)
+	{
+		type* tt = thiz->t[i];
+		tt->name += offset;
+		tt->f += offset;
+		for (int j = 0; j < tt->n; ++j)
+		{
+			tt->f[j]->name += offset;
+		}
+	}
+}
+
+void
+zproto_free(struct zproto *thiz){
+	free(thiz->mem.ptr);
+	thiz = NULL;
+}
+
+void
+zproto_dump(struct zproto *thiz) {
+	int i, j;
+	static const char * buildin[] = {
+		"number",
+		"string",
+		"bool",
+	};
+	printf("=== %d types ===\n", thiz->tn);
+	for (i = 0; i < thiz->tn; i++) {
+		struct type *ty = &thiz->type[i];
+		printf("%s %d\n", ty->name, i + 1);
+		for (j = 0; j < ty->n; j++) {
+			struct field *f = &ty->f[j];
+			if (f->key != 0) 
+				printf("\t%d[%d] %s = %d\n", f->type, f->key, f->name, f->tag);
+			else
+				printf("\t%d %s = %d\n", f->type, f->name, f->tag);
+		}
+	}
+	printf("=== %d protocol ===\n", thiz->pn);
+	for (i = 0; i < thiz->pn; i++) {
+		struct protocol *tp = &thiz->p[i];
+		printf("%s %d\n", tp->name, tp->tag);
+		if (tp->p[SPROTO_RESPONSE]) {
+			printf(" response:%s", tp->p[SPROTO_RESPONSE]->name);
+		}
+		printf("\n");
+	}
 }
 
 //encode/decode

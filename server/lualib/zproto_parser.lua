@@ -116,28 +116,25 @@ function convert.struct(all, obj)
     return result
 end
 function convert.protocol(all, obj)
-    local result = {tag = obj[1], name = checkname(obj[2]), field = {}}
-    local response = obj[4]
-    local field = nil
+    local result = {tag = obj[1], name = checkname(obj[2]), response = obj[4]}
+    local field = {}
     if obj[3] then
         if obj[3].type == "response" then
-            response = obj[3]
+            result.response = obj[3]
         elseif obj[3].type == nil then
-            field = obj[3]
+            local t = {}
+            for _,p in ipairs(obj[3]) do
+                local f = convert.field(all, t, p, result.name)
+                field[f.name] = f
+            end
         end
     end
-
-    if field then
-        local t = {}
-        for _, p in ipairs(field) do
-            local f = convert.field(all, t, p, result.name)
-            result.field[f.name] = f
-        end
-    end
+    local rqt = convert.struct(all, {result.name, field})
+    all.struct[rqt.name] = rqt
             
     if response then
         if "table" == type(response[1]) then
-            result.response = result.name ..".response"
+            result.response = obj[2] ..".response"
             local rsp = convert.struct(all, {result.response, response[1]})
             all.struct[rsp.name] = rsp
         else
@@ -147,17 +144,29 @@ function convert.protocol(all, obj)
     end
     return result
 end
-local function adjust(r)
+local function adjust(r, filename)
     local all = { struct = {} , protocol = {} }
     local t = {}
     for _, obj in ipairs(r) do
         local result = convert[obj.type](all, obj)
+        assert(not t[result.name], "Redefined typename ".. result.name)
+        t[result.name] = true
         all[obj.type][result.name] = result
+
+        if obj.type == "protocol" then
+            assert(not t[result.tag], "Redefined protocol no. ".. result.tag)
+            t[result.tag] = true
+
+            all.struct[result.name] = nil
+            result.request = filename and filename ..".".. result.name or result.name
+            result.name = nil
+            all.struct[result.request] = result
+        end
     end
     return all
 end
 
-local function link(all, result, fname)
+local function link(all, result)
     local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
@@ -176,10 +185,14 @@ local function link(all, result, fname)
         if type(f.type) == "number" then
             return
         end
-        if f.key and f.key ~= "[]" then
-            local keyf = all.struct[f.type].field[f.key]
-            assert((type(keyf.type) == "number" and keyf.type < 0) or buildin[keyf.type], "Map key:"..f.key.." must be buildin type")
-            f.key = keyf.tag
+        if f.key then
+            if f.key == "[]" then
+                f.key = -1
+            else
+                local keyf = all.struct[f.type].field[f.key]
+                assert((type(keyf.type) == "number" and keyf.type < 0) or buildin[keyf.type], "Map key:"..f.key.." must be buildin type")
+                f.key = keyf.tag
+            end
         end
         if not buildin[f.type] then
             for _,f in pairs(all.struct[f.type].field) do
@@ -188,27 +201,15 @@ local function link(all, result, fname)
         end
         f.type = gentypetag(f.type, T)
     end
-    fname = fname and fname .. "." or ""
-
 
     local tmp = {}
     for _,p in pairs(all.protocol) do
-        local fs = {}
-        for name, f in pairs(p.field) do
-            linkfield(f, tmp)
-            fs[f.tag] = f
-            f.tag = nil
-        end
-        p.field = fs
-
+        p.request = gentypetag(p.request, tmp)
         if p.response then
             assert(type(p.response) == "string")
             p.response = gentypetag(p.response, tmp)
         end
-        p.name = fname .. p.name
-        assert(not result.P[p.tag], "Redefined protocol no. " .. p.tag)
-        result.P[p.tag] = p
-        p.tag = nil
+        table.insert(result.P, p)
     end
     for _,t in pairs(tmp) do
         for _, f in pairs(t.field) do
@@ -216,17 +217,12 @@ local function link(all, result, fname)
         end
         result.T[t.tag] = t
     end
-
-    for _,t in pairs(result.T) do
-        if t.tag then
-            t.tag = nil
-            local fs = {}
-            for _, f in pairs(t.field) do
-                fs[f.tag] = f
-                f.tag = nil
-            end
-            t.field = fs
+    for _,t in pairs(result.T) do    
+        local fs = {}
+        for _, f in pairs(t.field) do
+            table.insert(fs, f)
         end
+        t.field = fs
     end
     all = nil
     return result
@@ -276,7 +272,7 @@ function parser.parse(text, filename, result)
     local state = { file = filename, pos = 0, line = 1 }
     local r = lpeg.match(protofile + exception, text, 1, state )
     local fnamepat = ((P(1) - (P"/" + "\\"))^0 * (P"/" + "\\")^1)^0 * C(word) * (P"." * (alpha + alnum)^0)^0
-    return link(adjust(r), result, fnamepat:match(filename))
+    link(adjust(r, fnamepat:match(filename)), result)
 end
 
 function parser.fparse(tbl)
