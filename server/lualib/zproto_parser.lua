@@ -168,10 +168,10 @@ local function link(all, result, filename)
         else
             assert(all.struct[t])
             if not all.struct[t].tag then
-                taginc = taginc + 1
                 all.struct[t].tag = taginc
                 T[taginc] = all.struct[t]
-            end
+                taginc = taginc + 1
+           end
             return all.struct[t].tag
         end
     end
@@ -235,19 +235,19 @@ The protocol of zproto
 
 --[[uage
 type{
-    string name = 1
     field {
         string name     =1
-        integer buildin = 2
-        integer[] type  = 3
+        integer buildin =2
+        integer type[]  =3
         integer tag     =4
-        boolean integer = 5
+        boolean integer =5
     }
-    field[name] fields  =2
+    string name         =1
+    field fields[name]  =2
 }
 
 0=protocol{
-    string name         =   1--fdfsdf
+    string name         =1--fdfsdf
     integer buildin     = 2--fdfsdf
     response {
       integer index     = 1

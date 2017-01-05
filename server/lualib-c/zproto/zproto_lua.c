@@ -78,6 +78,11 @@ static char* __zgetfieldstring(lua_State* L, struct zproto *Z, const chat *key){
 	return tmp;
 }
 
+/* global zproto pointer for multi states
+NOTICE : It is not thread safe
+*/
+static struct zproto *ZP = NULL;
+
 static int
 lcreate(lua_State *L) {
 	int idx = lua_gettop(L);
@@ -103,7 +108,7 @@ lcreate(lua_State *L) {
 			zlua_getfdata(L, "tag", &tag);
 			assert(tag <= z->tn);
 
-			struct type *ty = Z->t[tag - 1];
+			struct type *ty = Z->t[tag];
 			ty->name = __zgetfieldstring(L, Z, "name");
 			ty->fn = 0;
 			ty->f = NULL;
@@ -127,52 +132,57 @@ lcreate(lua_State *L) {
 		lua_pushlightuserdata(L, Z);
 		return 1;
 	}
-	return 0;
-}
-
-static int
-lrelease(lua_State *L) {
-	struct zproto *Z = lua_touserdata(L,1);
-	if (Z == NULL) {
-		return luaL_argerror(L, 1, "Need a zproto object");
-	}
 	zproto_free(Z);
 	return 0;
 }
 
 static int
-lquery(lua_State *L) {
-	const char *type_name;
-	struct zproto *sp = lua_touserdata(L,1);
-	struct zproto_type *st;
-	if (sp == NULL) {
+ldelete(lua_State *L) {
+	struct zproto *z = lua_touserdata(L,1);
+	if (z == NULL) {
 		return luaL_argerror(L, 1, "Need a zproto object");
 	}
-	type_name = luaL_checkstring(L,2);
-	st = zproto_type(sp, type_name);
-	if (st) {
-		lua_pushlightuserdata(L, st);
-		return 1;
-	}
+	zproto_free(z);
 	return 0;
 }
 
 static int
-ldump(lua_State *L) {
-	struct zproto *Z = lua_touserdata(L, 1);
-	if (Z == NULL) {
-		return luaL_argerror(L, 1, "Need a zproto_type object");
-	}
-	zproto_dump(Z);
+lsave(lua_State *L) {
+	assert(!ZP);
+	ZP = lua_touserdata(L, 1);
 	return 0;
 }
 
 static int
 lload(lua_State *L) {
-
-	return 0;
+	struct zproto* zp = *ZP;
+	assert(zp);
+	for (int i = 0; i < zp->pn; ++i)
+	{
+		struct protocol* p = zp->p[i];
+		lua_pushinteger(L, p->tag);
+		struct zproto_type* request = zproto_import(zp, p->request);
+		assert(request);
+		lua_pushstring(L, request->name);
+		lua_pushlightuserdata(L, request);
+		struct zproto_type* response = zproto_import(zp, p->response);
+		if (!response)
+			lua_pushlightuserdata(L, response);
+		else
+			lua_pushnil(L);
+	}
+	return 4 * zp->pn;
 }
 
+static int
+ldump(lua_State *L) {
+	struct zproto *z = lua_touserdata(L, 1);
+	if (z == NULL) {
+		return luaL_argerror(L, 1, "Need a zproto_type object");
+	}
+	zproto_dump(z);
+	return 0;
+}
 
 int
 luaopen_zproto_core(lua_State *L) {
@@ -181,10 +191,10 @@ luaopen_zproto_core(lua_State *L) {
 #endif
 	luaL_Reg l[] = {
 		{ "create", lcreate },
-		{ "delete", lrelease },
-		{ "dump", ldump },
+		{ "delete", ldelete },
+		{ "save", lsave },
 		{ "load", lload },
-		{ "query", lquery },
+		{ "dump", ldump },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);

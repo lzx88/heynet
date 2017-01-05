@@ -51,9 +51,7 @@ static void
 pool_free(struct memery *m) {
 	if (m->ptr)
 		free(m->ptr);
-	m->size = 0;
-	m->ptr = NULL;
-	m->curr = 0;
+	memset(m, 0, sizeof(*m));
 }
 static void *
 pool_enlarge(struct memery *m, size_t sz) {
@@ -87,7 +85,7 @@ pool_alloc(struct memery *m, size_t sz) {
 	return result;
 }
 
-struct zproto *
+static struct zproto *
 zproto_alloc(){
 	struct memery m;
 	pool_init(&m);
@@ -99,7 +97,7 @@ zproto_alloc(){
 	thiz->t = NULL;
 	return thiz;
 }
-bool
+static bool
 zproto_done(struct zproto *thiz){
 	void *base = thiz;
 	thiz = pool_enlarge(&thiz->mem, thiz->mem.curr);
@@ -119,12 +117,12 @@ zproto_done(struct zproto *thiz){
 		}
 	}
 }
-void
+static void
 zproto_free(struct zproto *thiz){
 	free(thiz->mem.ptr);
 	thiz = NULL;
 }
-void
+static void
 zproto_dump(struct zproto *thiz) {
 	int i, j;
 	static const char * buildin[] = {
@@ -155,6 +153,43 @@ zproto_dump(struct zproto *thiz) {
 	}
 }
 
+
+static struct type *
+zproto_import(struct zproto *thiz, int tidx) {
+	return 0 <= tidx && tidx < thiz->tn ? thiz->t[tidx] : NULL;
+}
+
+
+static struct protocol *
+zproto_query(struct zproto *thiz, int tag) {
+	int begin = 0, end = thiz->pn;
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		int t = thiz->p[mid].tag;
+		if (t == tag) {
+			return &thiz->p[mid];
+		}
+		if (tag > t) {
+			begin = mid + 1;
+		}
+		else {
+			end = mid;
+		}
+	}
+	return NULL;
+}
+
+static struct protocol *
+zproto_query(struct zproto *thiz, const char* name) {
+	for (int i = 0; i < thiz->pn; i++) {
+		struct type* request = zproto_import(thiz, thiz->p[i]->request);
+		if (0 == strcmp(name, request->name)) {
+			return thiz->p[i];
+		}
+	}
+	return NULL;
+}
+
 //encode/decode
 struct header;
 struct zstruct;
@@ -175,9 +210,9 @@ static char test_endian(){
 
 #pragma pack(1)
 struct header{
-	const char[8] magic = "Z-PROTO8";
-	const char endian = test_endian() == 'L'? 0 : 'B';
-	char[3] nbytes;//包体字节数 最大15M
+	const char[7] magic = "Z-PROTO";
+	const char endian = test_endian();
+	uint16 nbytes;//包体字节数 最大64k
 	uint16 msgid;//消息ID
 	uint32 session;//会话标识
 };
@@ -204,12 +239,8 @@ void write_tag(char* buf, uint16 tag, uint16 pre){
 bool write_number(char* buf, number i){
 	if ((i & ~0x7FFFFFFF) > 0)
 		return false;
-	uint32 n = 0;
-	if (i < 0)
-		n = (-i) << 1;
-	else(i > 0)
-		n = i << 1 + 1;
-	write_buf(buf, &v, sizeof(n));
+	uint32 n = i >= 0 ? (i << 1 + 1) : ((-i) << 1);
+	write_buf(buf, &n, sizeof(n));
 	return true;
 }
 
