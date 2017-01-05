@@ -46,7 +46,7 @@ local protocol = P {
     PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(name) * V"PROTO"),
     PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
     RESPONSE = namedpat("response", P"response" * (custompat(multipat(V"FIELD")) + blankpat"=" * typename)),
-    FIELD = namedpat("field", typename * (C"[]" + (P"[" * blankpat(name) * "]"))^-1 * blanks * name * blankpat"=" * tag),
+    FIELD = namedpat("field", typename * blanks * name * (C"[]" + (P"[" * blankpat(name) * "]"))^-1 * blankpat"=" * tag),
 }
 local protofile = dummy * protocol * dummy * eof
 
@@ -75,8 +75,7 @@ local convert = {}
 function convert.field(all, repeats, p, typename)
     local f = { type = p[1], name = p[2], tag = p[3] }
     if p[4] then
-        f.key = p[2]
-        f.name = p[3]
+        f.key = p[3]
         f.tag = p[4]
     end
     f.name = checkname(f.name)

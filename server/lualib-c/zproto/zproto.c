@@ -45,9 +45,7 @@ struct zproto{
 
 static void
 pool_init(struct memery *m) {
-	m->size = 0;
-	m->ptr = NULL;
-	m->curr = 0;
+	memset(m, 0, sizeof(*m));
 }
 static void
 pool_free(struct memery *m) {
@@ -101,7 +99,6 @@ zproto_alloc(){
 	thiz->t = NULL;
 	return thiz;
 }
-
 bool
 zproto_done(struct zproto *thiz){
 	void *base = thiz;
@@ -122,13 +119,11 @@ zproto_done(struct zproto *thiz){
 		}
 	}
 }
-
 void
 zproto_free(struct zproto *thiz){
 	free(thiz->mem.ptr);
 	thiz = NULL;
 }
-
 void
 zproto_dump(struct zproto *thiz) {
 	int i, j;
