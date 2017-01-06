@@ -180,18 +180,20 @@ local function link(all, result, filename)
             return
         end
         if f.key then
-            if f.key == "[]" then
-                f.key = -1
+            if f.key = "[]" then
+                f.key = 0
             else
                 local keyf = all.struct[f.type].field[f.key]
                 assert((type(keyf.type) == "number" and keyf.type < 0) or buildin[keyf.type], "Map key:"..f.key.." must be buildin type")
                 f.key = keyf.tag
             end
+        else
+            f.key = -1
         end
         if not buildin[f.type] then
             for _,f in pairs(all.struct[f.type].field) do
                 linkfield(f, T)
-            end            
+            end
         end
         f.type = gentypetag(f.type, T)
     end
@@ -212,7 +214,7 @@ local function link(all, result, filename)
         end
         result.T[t.tag] = t
     end
-    for _,t in pairs(result.T) do    
+    for _,t in pairs(result.T) do
         local fs = {}
         for _, f in pairs(t.field) do
             table.insert(fs, f)

@@ -6,10 +6,8 @@
 #include "lauxlib.h"
 #include "zproto.h"
 
-#define MAX_GLOBALZPROTO 16
-#define ENCODE_BUFFERSIZE 2050
-
-#define ENCODE_MAXSIZE 0x1000000
+#define ENCODE_BUFFERSIZE 2048 //0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
+#define ENCODE_MAXSIZE 16 
 #define ENCODE_DEEPLEVEL 64
 
 #ifndef luaL_newlib /* using LuaJIT */
@@ -43,15 +41,11 @@ LUALIB_API void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 
 #if LUA_VERSION_NUM < 502
 static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isnum) {
-	if (lua_isnumber(L, idx)) {
-		if (isnum) *isnum = 1;
-		return lua_tointeger(L, idx);
-	}
-	else {
-		if (isnum) *isnum = 0;
-		return 0;
-	}
+	int b = lua_isnumber(L, idx);
+	if (isnum) *isnum = b ? 1 : 0;
+	return b ? lua_tointeger(L, idx) : 0;
 }
+
 #endif
 
 // work around , use push & lua_gettable may be better
@@ -64,8 +58,7 @@ inline void zlua_getdata(lua_State* L, int idx, int *val) { *val = lua_tointeger
 inline void zlua_getdata(lua_State* L, int idx, char **val){ *val = lua_tostring(L, idx); }
 inline void zlua_getfield(lua_State* L, int idx, int k) { lua_rawgeti(L, idx, k); }
 inline void zlua_getfield(lua_State* L, int idx, const char* k) { lua_rawgetp(L, idx, k); }
-inline bool __zlua_tblcheck(){ if (lua_istable(L, -1)) return true; lua_pop(L, 1); return false; }
-#define if_getluatable(L, k) zlua_getfield(L, -1, k); for(int i = 0; i-- == 0 && __zlua_tblcheck(); lua_pop(L, 1))
+#define if_getluatable(L, k) zlua_getfield(L, -1, k); for(int i = 0; i-- == 0 && lua_istable(L, -1) || (lua_pop(L, 1); false); lua_pop(L, 1))
 #define for_luatable(L)  for(lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1), lua_pop(L, 1))
 #define zlua_getsize(L) lua_rawlen(L, -1)
 #define zlua_getfdata(L, k, val) zlua_getfield(L, -1, k); zlua_getdata(L, -1, val); lua_pop(L, 1)
@@ -120,9 +113,10 @@ lcreate(lua_State *L) {
 					assert(n < ty->fn);
 					struct field *tf = ty->f[n++];
 					tf->name = __zgetfieldstring(L, Z, "name");
+					tf->key = ZK_NULL;
 					zlua_getfdata(L, "tag", &tf->tag);
-					zlua_getfdata(L, "type", &tf->type);
 					zlua_getfdata(L, "key", &tf->key);
+					zlua_getfdata(L, "type", &tf->type);
 				}
 			}
 		}		
@@ -184,6 +178,31 @@ ldump(lua_State *L) {
 	return 0;
 }
 
+static void
+pushfunc_withbuffer(lua_State *L, const char * name, lua_CFunction func) {
+	lua_newuserdata(L, ENCODE_BUFFERSIZE);
+	lua_pushinteger(L, ENCODE_BUFFERSIZE);
+	lua_pushcclosure(L, func, 2);
+	lua_setfield(L, -2, name);
+}
+
+static void *
+expand_buffer(lua_State *L, int oldsize, int newsize) {
+	void *output;
+	do {
+		oldsize *= 2;
+	} while (oldsize < newsize);
+	if (oldsize > ENCODE_MAXSIZE) {
+		luaL_error(L, "object is too large (>%d)", ENCODE_MAXSIZE);
+		return NULL;
+	}
+	output = lua_newuserdata(L, oldsize);
+	lua_replace(L, lua_upvalueindex(1));
+	lua_pushinteger(L, oldsize);
+	lua_replace(L, lua_upvalueindex(2));
+	return output;
+}
+
 int
 luaopen_zproto_core(lua_State *L) {
 #ifdef luaL_checkversion
@@ -198,9 +217,9 @@ luaopen_zproto_core(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);
-	pushfunction_withbuffer(L, "encode", lencode);
-	pushfunction_withbuffer(L, "pack", lpack);
-	pushfunction_withbuffer(L, "unpack", lunpack);
+	pushfunc_withbuffer(L, "encode", lencode);
+	pushfunc_withbuffer(L, "pack", lpack);
+	pushfunc_withbuffer(L, "unpack", lunpack);
 	return 1;
 }
 

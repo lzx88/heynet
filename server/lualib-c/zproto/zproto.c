@@ -3,46 +3,15 @@
 #include <stdio.h>
 #include <assert.h>
 #include "msvcint.h"
-
 #include "zproto.h"
 
-#define ZT_NUMBER -1
-#define ZT_STRING -2
-#define ZT_BOOL	  -3
-// >0 自定义类型 tag
-
+/**********************memery************************/
 #define CHUNK_SIZE 0x100000 //1M
-#define LEN_SIZE 4
-
 struct memery{
 	int curr;
 	int size;
 	void *ptr;
 };
-struct field{
-	const char *name;
-	int tag;
-	int type;
-	int key;
-};
-struct type{
-	const char *name;
-	int n;
-	struct field *f;
-};
-struct protocol{
-	int tag;
-	int request;
-	int response;
-};
-struct zproto{
-	struct memery mem;
-	int pn;
-	struct protocol *p;
-	int tn;
-	struct type *t;
-};
-
 static void
 pool_init(struct memery *m) {
 	memset(m, 0, sizeof(*m));
@@ -85,16 +54,46 @@ pool_alloc(struct memery *m, size_t sz) {
 	return result;
 }
 
+/**********************zproto************************/
+#define ZT_BOOL	  -3
+#define ZT_STRING -2
+#define ZT_NUMBER -1
+// >=0 自定义类型 type tag
+#define ZK_ARRAY  0
+#define ZK_NULL  -1
+// ZK_MAP>0 自定义类型 field tag
+
+struct field{
+	const char *name;
+	int tag;
+	int type;
+	int key;
+};
+struct type{
+	const char *name;
+	int n;
+	struct field *f;
+};
+struct protocol{
+	int tag;
+	int request;
+	int response;
+};
+struct zproto{
+	struct memery mem;
+	int pn;
+	struct protocol *p;
+	int tn;
+	struct type *t;
+};
+
 static struct zproto *
 zproto_alloc(){
 	struct memery m;
 	pool_init(&m);
 	zproto* thiz = pool_alloc(&m, sizeof(*thiz));
+	memset(thiz, 0, sizeof(*thiz));
 	thiz->mem = m;
-	thiz->pn = 0;
-	thiz->p = NULL;
-	thiz->tn = 0;
-	thiz->t = NULL;
 	return thiz;
 }
 static bool
@@ -152,14 +151,10 @@ zproto_dump(struct zproto *thiz) {
 		printf("\n");
 	}
 }
-
-
 static struct type *
-zproto_import(struct zproto *thiz, int tidx) {
-	return 0 <= tidx && tidx < thiz->tn ? thiz->t[tidx] : NULL;
+zproto_import(struct zproto *thiz, int idx) {
+	return 0 <= idx && idx < thiz->tn ? thiz->t[idx] : NULL;
 }
-
-
 static struct protocol *
 zproto_query(struct zproto *thiz, int tag) {
 	int begin = 0, end = thiz->pn;
@@ -178,16 +173,115 @@ zproto_query(struct zproto *thiz, int tag) {
 	}
 	return NULL;
 }
-
-static struct protocol *
-zproto_query(struct zproto *thiz, const char* name) {
-	for (int i = 0; i < thiz->pn; i++) {
-		struct type* request = zproto_import(thiz, thiz->p[i]->request);
-		if (0 == strcmp(name, request->name)) {
-			return thiz->p[i];
+int
+zproto_encode(char *buffer, int size, const struct type *ty, zproto_callback cb, void *ud) {
+	struct zproto_arg args;
+	char *header = buffer;
+	char *data;
+	int header_sz = SIZEOF_HEADER + ty->maxn * SIZEOF_FIELD;
+	int i;
+	int index;
+	int lasttag;
+	int datasz;
+	if (size < header_sz)
+		return -1;
+	args.ud = ud;
+	data = header + header_sz;
+	size -= header_sz;
+	index = 0;
+	lasttag = -1;
+	for (i = 0; i < ty->n; i++) {
+		struct field *f = &ty->f[i];
+		int type = f->type;
+		int value = 0;
+		int sz = -1;
+		args.tagname = f->name;
+		args.tagid = f->tag;
+		args.subtype = f->st;
+		args.mainindex = f->key;
+		if (type & SPROTO_TARRAY) {
+			args.type = type & ~SPROTO_TARRAY;
+			sz = encode_array(cb, &args, data, size);
+		}
+		else {
+			args.type = type;
+			args.index = 0;
+			switch (type) {
+			case SPROTO_TINTEGER:
+			case SPROTO_TBOOLEAN: {
+									  union {
+										  uint64_t u64;
+										  uint32_t u32;
+									  } u;
+									  args.value = &u;
+									  args.length = sizeof(u);
+									  sz = cb(&args);
+									  if (sz < 0) {
+										  if (sz == SPROTO_CB_NIL)
+											  continue;
+										  if (sz == SPROTO_CB_NOARRAY)	// no array, don't encode it
+											  return 0;
+										  return -1;	// sz == SPROTO_CB_ERROR
+									  }
+									  if (sz == sizeof(uint32_t)) {
+										  if (u.u32 < 0x7fff) {
+											  value = (u.u32 + 1) * 2;
+											  sz = 2; // sz can be any number > 0
+										  }
+										  else {
+											  sz = encode_integer(u.u32, data, size);
+										  }
+									  }
+									  else if (sz == sizeof(uint64_t)) {
+										  sz = encode_uint64(u.u64, data, size);
+									  }
+									  else {
+										  return -1;
+									  }
+									  break;
+			}
+			case SPROTO_TSTRUCT:
+			case SPROTO_TSTRING:
+				sz = encode_object(cb, &args, data, size);
+				break;
+			}
+		}
+		if (sz < 0)
+			return -1;
+		if (sz > 0) {
+			char * record;
+			int tag;
+			if (value == 0) {
+				data += sz;
+				size -= sz;
+			}
+			record = header + SIZEOF_HEADER + SIZEOF_FIELD*index;
+			tag = f->tag - lasttag - 1;
+			if (tag > 0) {
+				// skip tag
+				tag = (tag - 1) * 2 + 1;
+				if (tag > 0xffff)
+					return -1;
+				record[0] = tag & 0xff;
+				record[1] = (tag >> 8) & 0xff;
+				++index;
+				record += SIZEOF_FIELD;
+			}
+			++index;
+			record[0] = value & 0xff;
+			record[1] = (value >> 8) & 0xff;
+			lasttag = f->tag;
 		}
 	}
-	return NULL;
+	header[0] = index & 0xff;
+	header[1] = (index >> 8) & 0xff;
+
+	datasz = data - (header + header_sz);
+	data = header + header_sz;
+	if (index != ty->maxn) {
+		memmove(header + SIZEOF_HEADER + index * SIZEOF_FIELD, data, datasz);
+	}
+	return SIZEOF_HEADER + index * SIZEOF_FIELD + datasz;
 }
 
 //encode/decode

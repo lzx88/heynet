@@ -4,6 +4,7 @@
 
 struct zproto;
 typedef struct type zproto_type;
-
+struct zproto_arg {
+};
 
 #endif
