@@ -6,8 +6,8 @@
 #include "lauxlib.h"
 #include "zproto.h"
 
-#define ENCODE_BUFFERSIZE 2048 //0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
-#define ENCODE_MAXSIZE 16 
+#define ENCODE_BUFFERSIZE 2 << 10 //0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
+#define ENCODE_MAXSIZE 16 << 20
 #define ENCODE_DEEPLEVEL 64
 
 #ifndef luaL_newlib /* using LuaJIT */
@@ -182,25 +182,44 @@ static void
 pushfunc_withbuffer(lua_State *L, const char * name, lua_CFunction func) {
 	lua_newuserdata(L, ENCODE_BUFFERSIZE);
 	lua_pushinteger(L, ENCODE_BUFFERSIZE);
-	lua_pushcclosure(L, func, 2);
+	lua_pushinteger(L, 0);
+	lua_pushcclosure(L, func, 3);
 	lua_setfield(L, -2, name);
 }
 
 static void *
-expand_buffer(lua_State *L, int oldsize, int newsize) {
-	void *output;
-	do {
-		oldsize *= 2;
-	} while (oldsize < newsize);
+adjust_buffer(lua_State *L, int oldsize, int newsize) {
+	int halftimes = lua_tointeger(L, lua_upvalueindex(3));
+	if (newsize <= (oldsize >> 1)) {
+		if (++halftimes >= 5) {
+			halftimes = 0;
+			oldsize >>= 1;
+		}
+	}
+	else if (newsize <= oldsize)
+		return NULL;//no here
+	else {
+		halftimes = 0;
+		while (newsize > oldsize)
+			oldsize <<= 1;
+	}
 	if (oldsize > ENCODE_MAXSIZE) {
 		luaL_error(L, "object is too large (>%d)", ENCODE_MAXSIZE);
 		return NULL;
 	}
-	output = lua_newuserdata(L, oldsize);
-	lua_replace(L, lua_upvalueindex(1));
-	lua_pushinteger(L, oldsize);
-	lua_replace(L, lua_upvalueindex(2));
-	return output;
+
+	void *buf = NULL;
+	lua_pushinteger(L, halftimes);
+	lua_replace(L, lua_upvalueindex(3));
+	if (halftimes == 0)	{
+		buf = lua_newuserdata(L, oldsize);
+		lua_replace(L, lua_upvalueindex(1));
+		lua_pushinteger(L, oldsize);
+		lua_replace(L, lua_upvalueindex(2));
+	}
+	else
+		buf = lua_touserdata(L, lua_upvalueindex(1));
+	return buf;
 }
 
 int
