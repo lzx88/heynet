@@ -145,8 +145,8 @@ zproto_dump(struct zproto *thiz) {
 	for (i = 0; i < thiz->pn; i++) {
 		struct protocol *tp = &thiz->p[i];
 		printf("%s %d\n", tp->name, tp->tag);
-		if (tp->p[SPROTO_RESPONSE]) {
-			printf(" response:%s", tp->p[SPROTO_RESPONSE]->name);
+		if (tp->p[ZPROTO_RESPONSE]) {
+			printf(" response:%s", tp->p[ZPROTO_RESPONSE]->name);
 		}
 		printf("\n");
 	}
@@ -173,78 +173,122 @@ zproto_query(struct zproto *thiz, int tag) {
 	}
 	return NULL;
 }
+
+//encode/decode
+
+typedef int64 number;
+static char
+test_endian(){
+	union {
+		char c;
+		short s;
+	}u;
+	u.s = "BL";
+	return c;
+}
+
+#pragma pack(1)
+struct header{
+	const char[7] magic = "Z-PROTO";
+	const char endian = test_endian();
+	uint16 nbytes;//包体字节数 最大64k
+	uint16 msgid;//消息ID
+	uint32 session;//会话标识
+};
+#pragma pack()
+
+struct message{
+	header head;
+	zstruct content;
+};
+
+void write_buf(char* buf, char* data, size_t len){
+	memcpy(buf, data, len);
+}
+void write_tag(char* buf, uint16 tag, uint16 pre){
+	tag -= pre + 1;
+	write_buf(buf, &tag, sizeof(tag));
+}
+bool write_number(char* buf, number i){
+	if ((i & ~0x7FFFFFFF) > 0)
+		return false;
+	uint32 n = i >= 0 ? (i << 1 + 1) : ((-i) << 1);
+	write_buf(buf, &n, sizeof(n));
+	return true;
+}
+void write_string(char* buf, char* cstr){
+	uint16 len = strlen(cstr);
+	write_buf(buf, &len, sizeof(len));
+	write_buf(buf, cstr, len + 1);
+}
+void write_struct(zstruct* content, char* buf){
+	write_buf(buf, content->n, sizeof(content->n));
+	write_tag(buf + 2, content->n, sizeof(content->n));
+}
+void write_message(char* buf, size_t s, message* msg){
+	write_buf(buf, msg->head, sizeof(msg->head));
+	write_struct(buf, msg->content);
+}
+
+uint16 read_tag(char* buf){
+	return *buf;
+}
+number read_number(char* buf){
+	uint32 n = 0;
+	memcpy(&n, buf, sizeof(n));
+	if (n & 1)
+		return n >> 1;
+	return -(n >> 1);
+}
+
 int
-zproto_encode(char *buffer, int size, const struct type *ty, zproto_callback cb, void *ud) {
-	struct zproto_arg args;
-	char *header = buffer;
-	char *data;
-	int header_sz = SIZEOF_HEADER + ty->maxn * SIZEOF_FIELD;
-	int i;
-	int index;
-	int lasttag;
-	int datasz;
-	if (size < header_sz)
-		return -1;
+zproto_encode(void *buffer, int size, const struct type *ty, zproto_cb cb, void *ud) {
+	struct zproto_encode_arg args;
 	args.ud = ud;
-	data = header + header_sz;
-	size -= header_sz;
-	index = 0;
-	lasttag = -1;
-	for (i = 0; i < ty->n; i++) {
-		struct field *f = &ty->f[i];
-		int type = f->type;
-		int value = 0;
-		int sz = -1;
-		args.tagname = f->name;
-		args.tagid = f->tag;
-		args.subtype = f->st;
-		args.mainindex = f->key;
-		if (type & SPROTO_TARRAY) {
-			args.type = type & ~SPROTO_TARRAY;
-			sz = encode_array(cb, &args, data, size);
-		}
-		else {
-			args.type = type;
-			args.index = 0;
-			switch (type) {
-			case SPROTO_TINTEGER:
-			case SPROTO_TBOOLEAN: {
-									  union {
-										  uint64_t u64;
-										  uint32_t u32;
-									  } u;
-									  args.value = &u;
-									  args.length = sizeof(u);
-									  sz = cb(&args);
-									  if (sz < 0) {
-										  if (sz == SPROTO_CB_NIL)
-											  continue;
-										  if (sz == SPROTO_CB_NOARRAY)	// no array, don't encode it
-											  return 0;
-										  return -1;	// sz == SPROTO_CB_ERROR
-									  }
-									  if (sz == sizeof(uint32_t)) {
-										  if (u.u32 < 0x7fff) {
-											  value = (u.u32 + 1) * 2;
-											  sz = 2; // sz can be any number > 0
-										  }
-										  else {
-											  sz = encode_integer(u.u32, data, size);
-										  }
-									  }
-									  else if (sz == sizeof(uint64_t)) {
-										  sz = encode_uint64(u.u64, data, size);
-									  }
-									  else {
-										  return -1;
-									  }
-									  break;
+	uint16* fn = buffer;
+	uint16* tags = buffer + sizeof(*fn)
+	int fidx = 0;
+	for (int i = 0; i < ty->n; ++i) {
+		args.field = &ty->f[i];
+		const field &f = ty->f[i];
+		if (f.k >= ZK_ARRAY)//array
+		cb(&args);
+		switch (f.type) {
+		case ZT_NUMBER:
+		case ZT_STRING:
+		case ZT_BOOL:
+			union {
+				uint64_t u64;
+				uint32_t u32;
+			} u;
+			args.value = &u;
+			args.length = sizeof(u);
+			sz = cb(&args);
+			if (sz < 0) {
+				if (sz == ZPROTO_CB_NIL)
+					continue;
+				if (sz == ZPROTO_CB_NOARRAY)	// no array, don't encode it
+					return 0;
+				return -1;	// sz == ZPROTO_CB_ERROR
 			}
-			case SPROTO_TSTRUCT:
-			case SPROTO_TSTRING:
-				sz = encode_object(cb, &args, data, size);
-				break;
+			if (sz == sizeof(uint32_t)) {
+				if (u.u32 < 0x7fff) {
+					value = (u.u32 + 1) * 2;
+					sz = 2; // sz can be any number > 0
+				}
+				else {
+					sz = encode_integer(u.u32, data, size);
+				}
 			}
+			else if (sz == sizeof(uint64_t)) {
+				sz = encode_uint64(u.u64, data, size);
+			}
+			else {
+				return -1;
+			}
+			break;
+		default:
+			
 		}
 		if (sz < 0)
 			return -1;
@@ -284,86 +328,4 @@ zproto_encode(char *buffer, int size, const struct type *ty, zproto_callback cb,
 	return SIZEOF_HEADER + index * SIZEOF_FIELD + datasz;
 }
 
-//encode/decode
-struct header;
-struct zstruct;
-
-struct message{
-	header head;
-	zstruct content;
-};
-
-static char test_endian(){
-	union {
-		char c;
-		short s;
-	}u;
-	u.s = "BL";
-	return c;
-}
-
-#pragma pack(1)
-struct header{
-	const char[7] magic = "Z-PROTO";
-	const char endian = test_endian();
-	uint16 nbytes;//包体字节数 最大64k
-	uint16 msgid;//消息ID
-	uint32 session;//会话标识
-};
-#pragma pack()
-
-typedef int64 number;
-
-struct zstruct{
-	uint16 n;//数据个数
-	uint16* tags;//n个字段的标签
-	uint32* nums;//n个字段的数据
-	char data[];//数据块 头4字节为长度
-};
-
-void write_buf(char* buf, char* data, size_t len){
-	memcpy(buf, data, len);
-}
-
-void write_tag(char* buf, uint16 tag, uint16 pre){
-	tag -= pre + 1;
-	write_buf(buf, &tag, sizeof(tag));
-}
-
-bool write_number(char* buf, number i){
-	if ((i & ~0x7FFFFFFF) > 0)
-		return false;
-	uint32 n = i >= 0 ? (i << 1 + 1) : ((-i) << 1);
-	write_buf(buf, &n, sizeof(n));
-	return true;
-}
-
-void write_string(char* buf, char* cstr){
-	uint16 len = strlen(cstr);
-	write_buf(buf, &len, sizeof(len));
-	write_buf(buf, cstr, len + 1);
-}
-
-void write_struct(zstruct* content, char* buf){
-	write_buf(buf, content->n, sizeof(content->n));
-	write_tag(buf + 2, content->n, sizeof(content->n));
-
-}
-
-void write_message(char* buf, size_t s, message* msg){
-	write_buf(buf, msg->head, sizeof(msg->head));
-	write_struct(buf, msg->content);
-}
-
-uint16 read_tag(char* buf){
-	return *buf;
-}
-
-number read_number(char* buf){
-	uint32 n = 0;
-	memcpy(&n, buf, sizeof(n));
-	if (n & 1)
-		return n >> 1;
-	return -(n >> 1);
-}
 

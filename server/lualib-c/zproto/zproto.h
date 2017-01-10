@@ -3,8 +3,12 @@
 #include <stddef.h>
 
 struct zproto;
-typedef struct type zproto_type;
-struct zproto_arg {
+struct zproto_type;
+struct zproto_field;
+struct zproto_encode_arg {
+	struct zproto_field *field;
+	void *ud;
 };
 
+typedef int(*zproto_cb)(const struct zproto_encode_arg *args);
 #endif

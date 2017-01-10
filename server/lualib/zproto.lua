@@ -16,7 +16,7 @@ end
 
 function zproto.new()
     local self = {
-        __cache = setmetatable( {} , { __mode = "kv"}),
+        __cache = setmetatable( {} , { __mode = "v"}),
     }
     return setmetatable(self, zproto)
 end
@@ -25,16 +25,26 @@ function zproto.load()
     local self = zproto.new()
     local tbl = table.pack(core.load())
     local i = 1
-    repeat
-        local proto = { tag = tbl[i], request = tbl[i + 2], response = tbl[i + 3] }
-        local name =  tbl[i + 1]
-        self.__cache[name] = proto
+    while i < tbl.n do
+        local name =  tbl[i]
+        self.__cache[name] = { tag = tbl[i + 1], request = tbl[i + 2], response = tbl[i + 3] }
         i = i + 4
-    until i >= tbl.n
+    end
 end
 
 function zproto:find(name)
     return self.__cache[name]
 end
+
+function sproto:encode(typename, tbl)
+    local proto = self:find(typename)
+    return core.encode(proto.tag, proto.request, tbl)
+end
+
+function sproto:decode(typename, tbl)
+    local proto = self:find(typename)
+    return core.decode(proto.tag, proto.request, tbl)
+end
+
 
 return zproto
