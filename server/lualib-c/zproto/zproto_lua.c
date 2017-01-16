@@ -59,7 +59,7 @@ inline void zlua_getdata(lua_State* L, int idx, char **val){ *val = lua_tostring
 inline void zlua_getfield(lua_State* L, int idx, int k) { lua_rawgeti(L, idx, k); }
 inline void zlua_getfield(lua_State* L, int idx, const char* k) { lua_rawgetp(L, idx, k); }
 #define if_getluatable(L, k) zlua_getfield(L, -1, k); for(int i = 0; i-- == 0 && lua_istable(L, -1) || (lua_pop(L, 1); false); lua_pop(L, 1))
-#define for_luatable(L)  for(lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1), lua_pop(L, 1))
+#define for_luatable(L)  for(lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1))
 #define zlua_getsize(L) lua_rawlen(L, -1)
 #define zlua_getfdata(L, k, val) zlua_getfield(L, -1, k); zlua_getdata(L, -1, val); lua_pop(L, 1)
 
@@ -104,12 +104,14 @@ lcreate(lua_State *L) {
 
 			struct type *ty = Z->t[tag];
 			ty->name = __zgetfieldstring(L, Z, "name");
-			ty->fn = 0;
+			ty->n = 0;
 			ty->f = NULL;
 			if_getluatable(L, "field"){
-				ty->fn = zlua_getsize(L);
-				ty->f = pool_alloc(Z->mem, sizeof(*ty->f) * ty->fn);
+				ty->n = zlua_getsize(L);
+				ty->f = pool_alloc(Z->mem, sizeof(*ty->f) * ty->n);
 				int n = 0;
+				ty->maxn = ty->n;//最长feild 长度 ty->n + 参差数量
+				int lasttag = 0;
 				for_luatable(L){
 					assert(n < ty->fn);
 					struct field *tf = ty->f[n++];
@@ -118,6 +120,9 @@ lcreate(lua_State *L) {
 					zlua_getfdata(L, "tag", &tf->tag);
 					zlua_getfdata(L, "key", &tf->key);
 					zlua_getfdata(L, "type", &tf->type);
+					if (tf->tag != (lasttag + 1))
+						++ty->maxn;
+					lasttag = tf->tag;
 				}
 			}
 		}		
@@ -241,75 +246,75 @@ encode(const struct zproto_encode_arg *args) {
 	lua_State *L = self->L;
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
-	if (args->index > 0) {
-		if (args->tagname != self->array_tag) {
-			// a new array
-			self->array_tag = args->tagname;
-			lua_getfield(L, self->tbl_index, args->tagname);
-			if (lua_isnil(L, -1)) {
-				if (self->array_index) {
-					lua_replace(L, self->array_index);
-				}
-				self->array_index = 0;
-				return SPROTO_CB_NOARRAY;
-			}
-			if (!lua_istable(L, -1)) {
-				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
-					args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
-			}
-			if (self->array_index) {
-				lua_replace(L, self->array_index);
-			}
-			else {
-				self->array_index = lua_gettop(L);
-			}
-		}
-		if (args->mainindex >= 0) {
-			// use lua_next to iterate the table
-			// todo: check the key is equal to mainindex value
+	//if (args->index > 0) {
+	//	if (args->tagname != self->array_tag) {
+	//		// a new array
+	//		self->array_tag = args->tagname;
+	//		lua_getfield(L, self->tbl_index, args->tagname);
+	//		if (lua_isnil(L, -1)) {
+	//			if (self->array_index) {
+	//				lua_replace(L, self->array_index);
+	//			}
+	//			self->array_index = 0;
+	//			return SPROTO_CB_NOARRAY;
+	//		}
+	//		if (!lua_istable(L, -1)) {
+	//			return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
+	//				args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
+	//		}
+	//		if (self->array_index) {
+	//			lua_replace(L, self->array_index);
+	//		}
+	//		else {
+	//			self->array_index = lua_gettop(L);
+	//		}
+	//	}
+	//	if (args->mainindex >= 0) {
+	//		// use lua_next to iterate the table
+	//		// todo: check the key is equal to mainindex value
 
-			lua_pushvalue(L, self->iter_index);
-			if (!lua_next(L, self->array_index)) {
-				// iterate end
-				lua_pushnil(L);
-				lua_replace(L, self->iter_index);
-				return SPROTO_CB_NIL;
-			}
-			lua_insert(L, -2);
-			lua_replace(L, self->iter_index);
-		}
-		else {
-			lua_geti(L, self->array_index, args->index);
-		}
-	}
-	else {
+	//		lua_pushvalue(L, self->iter_index);
+	//		if (!lua_next(L, self->array_index)) {
+	//			// iterate end
+	//			lua_pushnil(L);
+	//			lua_replace(L, self->iter_index);
+	//			return SPROTO_CB_NIL;
+	//		}
+	//		lua_insert(L, -2);
+	//		lua_replace(L, self->iter_index);
+	//	}
+	//	else {
+	//		lua_geti(L, self->array_index, args->index);
+	//	}
+	//}
+	//else {
 		lua_getfield(L, self->tbl_index, args->tagname);
-	}
+	//}
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return SPROTO_CB_NIL;
+		return ZPROTO_CB_NIL;
 	}
 	switch (args->type) {
-	case SPROTO_TINTEGER: {
-							  lua_Integer v;
-							  lua_Integer vh;
-							  int isnum;
-							  v = lua_tointegerx(L, -1, &isnum);
-							  if (!isnum) {
-								  return luaL_error(L, ".%s[%d] is not an integer (Is a %s)",
-									  args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
-							  }
-							  lua_pop(L, 1);
-							  // notice: in lua 5.2, lua_Integer maybe 52bit
-							  vh = v >> 31;
-							  if (vh == 0 || vh == -1) {
-								  *(uint32_t *)args->value = (uint32_t)v;
-								  return 4;
-							  }
-							  else {
-								  *(uint64_t *)args->value = (uint64_t)v;
-								  return 8;
-							  }
+	case ZT_NUMBER: {
+		lua_Integer v;
+		lua_Integer vh;
+		int isnum;
+		v = lua_tointegerx(L, -1, &isnum);
+		if (!isnum) {
+			return luaL_error(L, ".%s[%d] is not an integer (Is a %s)",
+				args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
+		}
+		lua_pop(L, 1);
+		// notice: in lua 5.2, lua_Integer maybe 52bit
+		vh = v >> 31;
+		if (vh == 0 || vh == -1) {
+			*(uint32_t *)args->value = (uint32_t)v;
+			return 4;
+		}
+		else {
+			*(uint64_t *)args->value = (uint64_t)v;
+			return 8;
+		}
 	}
 	case SPROTO_TBOOLEAN: {
 							  int v = lua_toboolean(L, -1);

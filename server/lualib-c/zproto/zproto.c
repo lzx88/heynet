@@ -55,14 +55,6 @@ pool_alloc(struct memery *m, size_t sz) {
 }
 
 /**********************zproto************************/
-#define ZT_BOOL	  -3
-#define ZT_STRING -2
-#define ZT_NUMBER -1
-// >=0 自定义类型 type tag
-#define ZK_ARRAY  0
-#define ZK_NULL  -1
-// ZK_MAP>0 自定义类型 field tag
-
 struct field{
 	const char *name;
 	int tag;
@@ -71,6 +63,7 @@ struct field{
 };
 struct type{
 	const char *name;
+	int maxn;
 	int n;
 	struct field *f;
 };
@@ -96,12 +89,12 @@ zproto_alloc(){
 	thiz->mem = m;
 	return thiz;
 }
-static bool
+static struct zproto *
 zproto_done(struct zproto *thiz){
 	void *base = thiz;
 	thiz = pool_enlarge(&thiz->mem, thiz->mem.curr);
 	if (thiz == NULL)
-		return false;
+		return NULL;
 	int offset = base - thiz;
 	thiz->p += offset;
 	thiz->t += offset;
@@ -115,6 +108,7 @@ zproto_done(struct zproto *thiz){
 			tt->f[j]->name += offset;
 		}
 	}
+	return thiz;
 }
 static void
 zproto_free(struct zproto *thiz){
@@ -176,7 +170,7 @@ zproto_query(struct zproto *thiz, int tag) {
 
 //encode/decode
 
-typedef int64 number;
+typedef int64 integer;
 static char
 test_endian(){
 	union {
@@ -186,6 +180,7 @@ test_endian(){
 	u.s = "BL";
 	return c;
 }
+
 
 #pragma pack(1)
 struct header{
@@ -205,35 +200,41 @@ struct message{
 void write_buf(char* buf, char* data, size_t len){
 	memcpy(buf, data, len);
 }
-void write_tag(char* buf, uint16 tag, uint16 pre){
-	tag -= pre + 1;
-	write_buf(buf, &tag, sizeof(tag));
+
+#define TAG_NULL 1
+#define SIZEOF_LENGTH sizeof(uint16)
+
+inline void encode_tag(uint32 tag){
+	assert(tag > 0 && tag < 0x40000000);
+	return tag << 2 & 1;
 }
-bool write_number(char* buf, number i){
-	if ((i & ~0x7FFFFFFF) > 0)
-		return false;
-	uint32 n = i >= 0 ? (i << 1 + 1) : ((-i) << 1);
-	write_buf(buf, &n, sizeof(n));
-	return true;
+
+inline uint32 encode_integer(char* buf, integer i){
+	if (i < 0){
+		i = -i;
+		return (~0x3FFFFFFF & i) ? TAG_NULL : (i << 2 & 3);
+	}
+	return (~0x7FFFFFFF & i) ? TAG_NULL : (i << 1);
 }
-void write_string(char* buf, char* cstr){
+
+inline void encode_size(){
 	uint16 len = strlen(cstr);
 	write_buf(buf, &len, sizeof(len));
 	write_buf(buf, cstr, len + 1);
 }
-void write_struct(zstruct* content, char* buf){
+void encode_struct(zstruct* content, char* buf){
 	write_buf(buf, content->n, sizeof(content->n));
-	write_tag(buf + 2, content->n, sizeof(content->n));
+	encode_tag(buf + 2, content->n, sizeof(content->n));
 }
-void write_message(char* buf, size_t s, message* msg){
+void encode_message(char* buf, size_t s, message* msg){
 	write_buf(buf, msg->head, sizeof(msg->head));
-	write_struct(buf, msg->content);
+	encode_struct(buf, msg->content);
 }
 
 uint16 read_tag(char* buf){
 	return *buf;
 }
-number read_number(char* buf){
+integer read_number(char* buf){
 	uint32 n = 0;
 	memcpy(&n, buf, sizeof(n));
 	if (n & 1)
@@ -241,55 +242,88 @@ number read_number(char* buf){
 	return -(n >> 1);
 }
 
+
+
+static int
+encode_object(uint8_t *data, int size, zproto_cb cb, struct zproto_encode_arg *args) {
+	if (size < SIZEOF_LENGTH)
+		return -1;
+	args->result = data + SIZEOF_LENGTH;
+	args->length = size - SIZEOF_LENGTH;
+	int sz = cb(args);
+	if (sz < 0) {
+		if (sz == ZPROTO_CB_ERROR)
+			return -1;
+	}
+	assert(sz <= args->length);	// verify buffer overflow
+	(uint16)(*data) = sz;
+	return sz + SIZEOF_LENGTH;
+}
+
 int
-zproto_encode(void *buffer, int size, const struct type *ty, zproto_cb cb, void *ud) {
+zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
+	assert(ty);
+	int fidx = 0, didx = 0, lasttag = 0, sz = 0;
+	struct zproto *thiz,
+
 	struct zproto_encode_arg args;
 	args.ud = ud;
+
 	uint16* fn = buffer;
-	uint16* tags = buffer + sizeof(*fn)
-	int fidx = 0;
+	*fn = ty->maxn;
+
+	uint32* fdata = buffer + sizeof(*fn);
+	void* data = fdata + sizeof(*fdata) * ty->maxn;
+
 	for (int i = 0; i < ty->n; ++i) {
-		args.field = &ty->f[i];
 		const field &f = ty->f[i];
-		if (f.k >= ZK_ARRAY)//array
-		cb(&args);
-		switch (f.type) {
-		case ZT_NUMBER:
-		case ZT_STRING:
-		case ZT_BOOL:
-			union {
-				uint64_t u64;
-				uint32_t u32;
-			} u;
-			args.value = &u;
-			args.length = sizeof(u);
-			sz = cb(&args);
-			if (sz < 0) {
-				if (sz == ZPROTO_CB_NIL)
-					continue;
-				if (sz == ZPROTO_CB_NOARRAY)	// no array, don't encode it
-					return 0;
-				return -1;	// sz == ZPROTO_CB_ERROR
-			}
-			if (sz == sizeof(uint32_t)) {
-				if (u.u32 < 0x7fff) {
-					value = (u.u32 + 1) * 2;
-					sz = 2; // sz can be any number > 0
+		if (f->tag != (lasttag + 1))
+			fdata[fidx++] = encode_tag(f->tag - lasttag - 1);
+		args.field = &f;
+		if (f.key == ZK_NULL){
+			switch (f.type) {
+			case ZT_INTEGER:
+			case ZT_BOOL:
+				integer i;
+				args.result = &i;
+				sz = cb(&args);
+				if (sz > 0) {
+					fdata[fidx] = encode_integer(i);
+					if (fdata[fidx++] == TAG_NULL)
+					{
+						(integer)(*data) = i;
+						didx += sizeof(integer);
+					}
 				}
-				else {
-					sz = encode_integer(u.u32, data, size);
+				break;
+			default:
+				sz = encode_object(data, size, cb, args);
+				if (sz > 0)
+				{
+
 				}
+				args.result = data + sizeof(uint16);
+				fdata[fidx++] = TAG_NULL;
+				(uint16)(*data) = sz;
+				didx += sz + sizeof(uint16);
+				break;
+				sz = zproto_encode(thiz, zproto_import(thiz, f.type), data + didx, size, cb, ud);
+				if (sz < 0) {
+					if (sz == ZPROTO_CB_ERROR)
+						return -1;
+				}
+				fdata[fidx++] = TAG_NULL;
+				didx += sz;
+				break;
 			}
-			else if (sz == sizeof(uint64_t)) {
-				sz = encode_uint64(u.u64, data, size);
-			}
-			else {
-				return -1;
-			}
-			break;
-		default:
-			
 		}
+		
+		lasttag = f->tag;
+		//array/map
+			cb(&args);
+		//args.field = &ty->f[i];
+
+	
 		if (sz < 0)
 			return -1;
 		if (sz > 0) {
