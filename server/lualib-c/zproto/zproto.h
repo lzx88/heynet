@@ -12,10 +12,13 @@
 
 struct zproto;
 struct zproto_type;
-struct zproto_field;
 struct zproto_encode_arg {
-	struct zproto_field *field;
-	void *result;
+	const char* fname;
+	int ftype;
+	int ftag;
+	int fkey;
+
+	void *value;
 	int length;
 	void *ud;
 };

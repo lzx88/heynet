@@ -263,23 +263,25 @@ encode_object(uint8_t *data, int size, zproto_cb cb, struct zproto_encode_arg *a
 int
 zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
 	assert(ty);
-	int fidx = 0, didx = 0, lasttag = 0, sz = 0;
-	struct zproto *thiz,
+	*(uint16*)buffer = ty->maxn;
+	uint32 *fdata = buffer + SIZEOF_LENGTH;
+	int headlen = SIZEOF_LENGTH + sizeof(*fdata) * ty->maxn;
+	if (headlen <= size)
+		return -1;
+	void* data = fdata + headlen;
 
+	int fidx = 0, didx = 0, lasttag = 0, sz = 0;
 	struct zproto_encode_arg args;
 	args.ud = ud;
-
-	uint16* fn = buffer;
-	*fn = ty->maxn;
-
-	uint32* fdata = buffer + sizeof(*fn);
-	void* data = fdata + sizeof(*fdata) * ty->maxn;
-
 	for (int i = 0; i < ty->n; ++i) {
 		const field &f = ty->f[i];
+		args.ftype = f.type;
+		args.fname = f.name;
+		args.ftag = f.tag;
+		args.fkey = f.key;
+
 		if (f->tag != (lasttag + 1))
 			fdata[fidx++] = encode_tag(f->tag - lasttag - 1);
-		args.field = &f;
 		if (f.key == ZK_NULL){
 			switch (f.type) {
 			case ZT_INTEGER:
@@ -289,11 +291,11 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				sz = cb(&args);
 				if (sz > 0) {
 					fdata[fidx] = encode_integer(i);
-					if (fdata[fidx++] == TAG_NULL)
-					{
-						(integer)(*data) = i;
+					if (fdata[fidx] == TAG_NULL){
+						*(integer*)data = i;
 						didx += sizeof(integer);
 					}
+					fidx++;
 				}
 				break;
 			default:
@@ -307,7 +309,7 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				(uint16)(*data) = sz;
 				didx += sz + sizeof(uint16);
 				break;
-				sz = zproto_encode(thiz, zproto_import(thiz, f.type), data + didx, size, cb, ud);
+				sz = zproto_encode(thiz, , data + didx, size, cb, ud);
 				if (sz < 0) {
 					if (sz == ZPROTO_CB_ERROR)
 						return -1;
