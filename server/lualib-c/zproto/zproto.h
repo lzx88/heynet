@@ -11,13 +11,10 @@
 // ZK_MAP>0 自定义类型 field tag
 
 struct zproto;
-struct zproto_type;
+typedef struct type zproto_type;
+typedef struct field zproto_field;
 struct zproto_encode_arg {
-	const char* fname;
-	int ftype;
-	int ftag;
-	int fkey;
-
+	const zproto_field *pf;
 	void *value;
 	int length;
 	void *ud;

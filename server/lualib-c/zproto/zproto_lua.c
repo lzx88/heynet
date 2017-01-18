@@ -338,7 +338,7 @@ lencode(lua_State *L) {
 	struct encode_ud self;
 	self.L = L;
 
-	while(true){
+	for (;;){
 		self.st = st;
 		self.tbl_index = tbl_index;
 		self.deep = 0;
