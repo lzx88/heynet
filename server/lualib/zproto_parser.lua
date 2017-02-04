@@ -9,7 +9,7 @@ local V = lpeg.V
 
 
 local exception = lpeg.Cmt(lpeg.Carg(1), function (_, pos, state)
-    error(string.format("syntax error at protocol file %s:%d!", state.file or "", state.line))
+    error(string.format("Syntax error at protocol file %s:%d!", state.file or "", state.line))
     return pos
 end)
 local function count_lines(_, pos, state)
@@ -275,7 +275,7 @@ end
 function parser.fparse(tbl)
     local result = { T = {}, P = {} }
     for _,path in pairs(tbl) do
-        local f = assert(io.open(path), "Can't open sproto file:" .. path)
+        local f = assert(io.open(path), "Can't open proto file:" .. path)
         local text = f:read "*a"
         f:close()
         parser.parse(text, path, result)

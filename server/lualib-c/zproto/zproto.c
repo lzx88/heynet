@@ -205,16 +205,15 @@ void write_buf(char* buf, char* data, size_t len){
 #define TAG_NULL 1
 #define SIZEOF_LENGTH sizeof(uint16)
 
-inline void encode_tag(uint32 tag){
+inline uint32 encode_tag(uint32 tag){
 	assert(tag > 0 && tag < 0x40000000);
 	return tag << 2 & 1;
 }
-
 inline uint32 encode_integer(integer i){
 	if (i >= 0)
-		return (~0x7FFFFFFF & i) ? TAG_NULL : (i << 1);
+		return (i & ~0x7FFFFFFF) ? TAG_NULL : (i << 1);
 	i = -i;
-	return (~0x3FFFFFFF & i) ? TAG_NULL : (i << 2 & 3);
+	return (i & ~0x3FFFFFFF) ? TAG_NULL : (i << 2 & 3);
 }
 
 inline void encode_size(){
@@ -262,13 +261,22 @@ encode_object(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size
 
 static int
 encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size) {
+	args->value = NULL;
+	if(cb(args) < 0)
+		return ZPROTO_CB_ERROR;
+
 	int sz = 0;
 	const struct field &f = *args->pf;
+	args->value = data;
+	args->length = 0;
 	switch (f.type) {
 	case ZT_INTEGER:
 		for (;;){
-			args->value = data;
 			sz = cb(args);//sz为字节数
+			if (sz == ZPROTO_CB_NIL)
+				break;
+			if (sz < 0)
+				return ZPROTO_CB_ERROR;
 		}
 		int noarray;
 		buffer = encode_integer_array(cb, args, buffer, size, &noarray);
@@ -330,23 +338,23 @@ encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size)
 }
 int
 zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
-	assert(ty);
-	*(uint16*)buffer = ty->maxn;
-	uint32 *fdata = buffer + SIZEOF_LENGTH;
-	int headlen = SIZEOF_LENGTH + sizeof(*fdata) * ty->maxn;
-	if (headlen <= size)
+	int headlen = SIZEOF_LENGTH + sizeof(uint32) * ty->maxn;
+	if (headlen < size)
 		return -1;
-	char *data = fdata + headlen;
+	size -= headlen;
+	uint32 *fdata = buffer + SIZEOF_LENGTH;
+	char *data = buffer + headlen;
+	*(uint16*)buffer = ty->maxn;
 
 	int fidx = 0, lasttag = 0, sz = 0;
 	struct zproto_encode_arg args;
 	args.ud = ud;
 	for (int i = 0; i < ty->n; ++i) {
+		args.pf = &ty->f[i];
 		const struct field &f = ty->f[i];
-		args.pf = &f;
-		if (f->tag != (lasttag + 1))
-			fdata[fidx++] = encode_tag(f->tag - lasttag - 1);
-
+		if (f.tag != (lasttag + 1))
+			fdata[fidx++] = encode_tag(f.tag - lasttag - 1);
+	
 		if (f.key >= ZK_ARRAY){
 			sz = encode_array(cb, args, data, size);
 			if (sz >= 0)
@@ -360,7 +368,6 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				args.value = &i;
 				sz = cb(&args);
 				if (sz >= 0) {
-					assert(sz == 0);
 					fdata[fidx] = encode_integer(i);
 					if (fdata[fidx] == TAG_NULL){
 						sz = sizeof(integer);
@@ -396,44 +403,12 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 
 		if (sz < 0)
 			return -1;
-		if (sz > 0)
-		{
+		if (sz > 0){
 			data += sz;
 			size -= sz;
 		}
 		fidx++;
 		lasttag = f->tag;
-		//array/map
-			cb(&args);
-		//args.field = &ty->f[i];
-
-	
-		if (sz < 0)
-			return -1;
-		if (sz > 0) {
-			char * record;
-			int tag;
-			if (value == 0) {
-				data += sz;
-				size -= sz;
-			}
-			record = header + SIZEOF_HEADER + SIZEOF_FIELD*index;
-			tag = f->tag - lasttag - 1;
-			if (tag > 0) {
-				// skip tag
-				tag = (tag - 1) * 2 + 1;
-				if (tag > 0xffff)
-					return -1;
-				record[0] = tag & 0xff;
-				record[1] = (tag >> 8) & 0xff;
-				++index;
-				record += SIZEOF_FIELD;
-			}
-			++index;
-			record[0] = value & 0xff;
-			record[1] = (value >> 8) & 0xff;
-			lasttag = f->tag;
-		}
 	}
 	header[0] = index & 0xff;
 	header[1] = (index >> 8) & 0xff;
@@ -445,5 +420,3 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 	}
 	return SIZEOF_HEADER + index * SIZEOF_FIELD + datasz;
 }
-
-

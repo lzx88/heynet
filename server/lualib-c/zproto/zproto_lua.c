@@ -8,6 +8,7 @@
 
 #define ENCODE_BUFFERSIZE (2 << 10)
 #define ENCODE_MAXSIZE (16 << 20)
+#define ENCODE_BUFDEC 5//编码缓存区调整速度
 #define ENCODE_DEEPLEVEL 64
 
 #ifndef luaL_newlib /* using LuaJIT */
@@ -199,7 +200,7 @@ static void *
 adjust_buffer(lua_State *L, int oldsize, int newsize) {
 	int halftimes = lua_tointeger(L, lua_upvalueindex(3));
 	if (newsize <= (oldsize >> 1)) {
-		if (++halftimes >= 5) {
+		if (++halftimes >= ENCODE_BUFDEC) {
 			halftimes = 0;
 			oldsize >>= 1;
 		}
@@ -241,6 +242,8 @@ static int
 encode(const struct zproto_encode_arg *args) {
 	struct encode_ud *self = args->ud;
 	lua_State *L = self->L;
+	const struct field &f = *args->pf;
+
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
 	//if (args->index > 0) {
@@ -291,24 +294,25 @@ encode(const struct zproto_encode_arg *args) {
 		lua_pop(L, 1);
 		return ZPROTO_CB_NIL;
 	}
-	switch (args->ftype) {
+	switch (f.type) {
 	case ZT_INTEGER:
 		int isnum;
-		*(integer *)args->value = lua_tointegerx(L, -1, &isnum);
+		integer v = lua_tointegerx(L, -1, &isnum);
 		if (!isnum)
-			return luaL_error(L, ".%s[%d] is not an integer (Is a %s)", args->fname, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not an integer (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
 		lua_pop(L, 1);
 		// notice: in lua 5.2, lua_Integer maybe 52bit
-		return sizeof(integer);
+		*(integer *)args->value = v;
+		return (v & ~0x7FffFFff) > 0 ? 8 : 4;
 	case ZT_BOOL:
 		if (!lua_isboolean(L, -1))
-			return luaL_error(L, ".%s[%d] is not a boolean (Is a %s)", args->fname, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a boolean (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
 		*(integer *)args->value = lua_toboolean(L, -1);
 		lua_pop(L, 1);
-		return sizeof(integer);
+		return 1;
 	case ZT_STRING:
 		if (!lua_isstring(L, -1))
-			return luaL_error(L, ".%s[%d] is not a string (Is a %s)", args->fname, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a string (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
 		size_t sz = 0;
 		const char *str = lua_tolstring(L, -1, &sz);
 		if (sz > args->length)
@@ -331,10 +335,11 @@ lencode(lua_State *L) {
 	int tag = lua_tointeger(L, 1);
 	struct zproto_type *ty = lua_touserdata(L, 2);
 	if (ty == NULL)
-		return luaL_argerror(L, 1, "Need a sproto_type object");
+		return luaL_argerror(L, 1, "Need a zproto_type object");
 	luaL_checktype(L, tbl_index, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);
 	
+	int tmp = 0;
 	struct encode_ud self;
 	self.L = L;
 
@@ -345,18 +350,21 @@ lencode(lua_State *L) {
 
 		lua_settop(L, tbl_index);
 		lua_pushnil(L);	// for iterator (stack slot 4)
-		buffer += sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
-		int r = zproto_encode(ty, buffer, sz - (sz >> 3), encode, &self);
+		tmp = sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
+		buffer += tmp;
+		int r = zproto_encode(ty, buffer, sz - tmp, encode, &self);
 		if (r < 0) {
-			buffer = adjust_buffer(L, sz, sz << 1);
-			sz <<= 1;
+			int newsz = sz << 1;
+			buffer = adjust_buffer(L, sz, newsz);
+			sz = newsz;
 		}
 		else {
-			adjust_buffer(L, sz, r);
+			adjust_buffer(L, sz, r + tmp);
 			lua_pushlstring(L, buffer, r);
 			return 1;
 		}
-	}
+	}	
+	return 0;//nohere
 }
 
 int
