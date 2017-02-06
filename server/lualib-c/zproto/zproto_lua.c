@@ -261,54 +261,23 @@ encode(const struct zproto_encode_arg *args) {
 			}
 			return 0;
 		}
-	}
-	//if (args->index > 0) {
-	//	if (args->tagname != self->array_tag) {
-	//		// a new array
-	//		self->array_tag = args->tagname;
-	//		lua_getfield(L, self->tbl_index, args->tagname);
-	//		if (lua_isnil(L, -1)) {
-	//			if (self->array_index) {
-	//				lua_replace(L, self->array_index);
-	//			}
-	//			self->array_index = 0;
-	//			return SPROTO_CB_NOARRAY;
-	//		}
-	//		if (!lua_istable(L, -1)) {
-	//			return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
-	//				args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
-	//		}
-	//		if (self->array_index) {
-	//			lua_replace(L, self->array_index);
-	//		}
-	//		else {
-	//			self->array_index = lua_gettop(L);
-	//		}
-	//	}
-	//	if (args->mainindex >= 0) {
-	//		// use lua_next to iterate the table
-	//		// todo: check the key is equal to mainindex value
+		else if (args->index == -1)	{
+			args->index = 0;
+			lua_pop(L, 1);
+			return 0;
+		}
+		assert(args->index != 0);
+		if (f.key > ZK_ARRAY) {
 
-	//		lua_pushvalue(L, self->iter_index);
-	//		if (!lua_next(L, self->array_index)) {
-	//			// iterate end
-	//			lua_pushnil(L);
-	//			lua_replace(L, self->iter_index);
-	//			return SPROTO_CB_NIL;
-	//		}
-	//		lua_insert(L, -2);
-	//		lua_replace(L, self->iter_index);
-	//	}
-	//	else {
-	//		lua_geti(L, self->array_index, args->index);
-	//	}
-	//}
-	//else {
-	lua_getfield(L, self->tbl_index, f.name);
-	//}
+		}			
+		else
+			lua_geti(L, -1, args->index);
+	}
+	else
+		lua_getfield(L, self->tbl_index, f.name);
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return SPROTO_CB_NIL;
+		return ZPROTO_CB_NIL;
 	}
 	switch (f.type) {
 	case ZT_INTEGER:
@@ -365,7 +334,7 @@ lencode(lua_State *L) {
 	luaL_checktype(L, tbl_index, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);
 	
-	int tmp = 0;
+	int rev = 0;
 	struct encode_ud self;
 	self.L = L;
 
@@ -376,17 +345,17 @@ lencode(lua_State *L) {
 
 		lua_settop(L, tbl_index);
 		lua_pushnil(L);	// for iterator (stack slot 4)
-		tmp = sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
-		buffer += tmp;
-		int r = zproto_encode(ty, buffer, sz - tmp, encode, &self);
-		if (r < 0) {
+		rev = sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
+		buffer += rev;
+		int use = zproto_encode(ty, buffer, sz - rev, encode, &self);
+		if (use < 0) {
 			int newsz = sz << 1;
 			buffer = adjust_buffer(L, sz, newsz);
 			sz = newsz;
 		}
 		else {
-			adjust_buffer(L, sz, r + tmp);
-			lua_pushlstring(L, buffer, r);
+			adjust_buffer(L, sz, use + rev);
+			lua_pushlstring(L, buffer, use);
 			return 1;
 		}
 	}	
@@ -404,6 +373,7 @@ luaopen_zproto_core(lua_State *L) {
 		{ "save", lsave },
 		{ "load", lload },
 		{ "dump", ldump },
+		{ "decode", ldecode },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);

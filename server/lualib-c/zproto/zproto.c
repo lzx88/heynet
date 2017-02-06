@@ -178,8 +178,8 @@ test_endian(){
 		char c;
 		short s;
 	}u;
-	u.s = "BL";
-	return c;
+	u.s = 1;
+	return u.c == 1 ? "L" : "B";
 }
 
 
@@ -258,12 +258,13 @@ encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size)
 			sz = cb(args);//sz为字节数
 			if (sz == ZPROTO_CB_NIL)
 				break;
+			if (args->index == 0)
+				break;
 			if (sz < 0)
 				return ZPROTO_CB_ERROR;
 		}
 		break;							
 	case ZT_BOOL:
-		args->index = 1;
 		for (;;) {
 			int v = 0;
 			args->value = &v;
