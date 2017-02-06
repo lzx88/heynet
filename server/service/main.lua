@@ -10,7 +10,7 @@ skynet.start(function()
 
 	local config_path = skynet.getenv "config_path"
 	config.load(config_path)
-	local loader = skynet.uniqueservice "protoloader"	
+	local loader = skynet.uniqueservice "protoloader"
 	local proto_path = 	skynet.getenv "proto_path"
 	skynet.call(loader, "lua", "load", proto_path)
 
@@ -20,6 +20,6 @@ skynet.start(function()
 	local gate_port = tonumber(skynet.getenv "gate_port")
 	skynet.call(hub, "lua", "open", "0.0.0.0", gate_port)
 	
-	skynet.error "Server is already start finish !\n"
+	skynet.error "Server is already start finish!\n"
 	skynet.exit()
 end)

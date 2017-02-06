@@ -18,6 +18,10 @@ local function login_finish()
 	sendClient("push", { text = "welcome" })
 end
 
+local function ontimer()
+	print("role.ontimer")
+end
+
 local function logout()
 	
 end
@@ -54,11 +58,20 @@ function role.online( root )
 	login_finish()
 end
 
+function role.timeout()
+	ontimer()
+	modulea.loop(function(name, impl)
+		if impl.ontimer then
+			impl.ontimer()
+		end
+	end)
+end
+
 function role.offline()
 	callCenter("logout", this.id)
 	callScene("logout", this.id)
 	subScene(nil, this.id)
-	modulea.anti(function(m)
+	modulea.loop(function(m)
 		if m.logout then
 			m.logout()
 		end

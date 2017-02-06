@@ -23,6 +23,8 @@ function handler:login()
 	data.fd = self.fd
 	role.online(data)
 	self.login = true --必须有机制确保登录未完成 客户端不请求
+	
+	service.addTimer(100, role.timeout)
 	return {ok = true}
 end
 

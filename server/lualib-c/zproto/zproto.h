@@ -18,6 +18,7 @@ struct zproto_encode_arg {
 	void *value;
 	int length;
 	void *ud;
+	int index;
 };
 
 #define ZPROTO_CB_ERROR -1

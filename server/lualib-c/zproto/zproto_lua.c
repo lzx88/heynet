@@ -242,10 +242,26 @@ static int
 encode(const struct zproto_encode_arg *args) {
 	struct encode_ud *self = args->ud;
 	lua_State *L = self->L;
+	const struct zproto_type *zt = self->st;
 	const struct field &f = *args->pf;
 
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
+	if (f.key >= ZK_ARRAY){
+		if (args->value == NULL){
+			lua_getfield(L, self->tbl_index, f.name);
+			if (lua_isnil(L, -1)) {
+				lua_pop(L, 1);
+				return ZPROTO_CB_NIL;
+			}
+			if (!lua_istable(L, -1)) {
+				lua_pop(L, 1);
+				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
+					f.name, f.tag, lua_typename(L, lua_type(L, -1)));
+			}
+			return 0;
+		}
+	}
 	//if (args->index > 0) {
 	//	if (args->tagname != self->array_tag) {
 	//		// a new array
@@ -288,11 +304,11 @@ encode(const struct zproto_encode_arg *args) {
 	//	}
 	//}
 	//else {
-	lua_getfield(L, self->tbl_index, args->fname);
+	lua_getfield(L, self->tbl_index, f.name);
 	//}
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return ZPROTO_CB_NIL;
+		return SPROTO_CB_NIL;
 	}
 	switch (f.type) {
 	case ZT_INTEGER:
@@ -321,9 +337,19 @@ encode(const struct zproto_encode_arg *args) {
 		lua_pop(L, 1);
 		return sz;
 	default:
-		if (self->st)
-			return zproto_encode(self->st, void *buffer, int size, zproto_cb cb, void *ud);
-		return luaL_error(L, "Invalid field type %d", args->type);
+		if (f.type < 0)
+			return luaL_error(L, "Invalid field type %s.%s", self->st->name, f.name);
+		if (!lua_istable(L, -1))
+			return luaL_error(L, ".%s[%d] is not a table (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
+		struct encode_ud sub;
+		sub.L = L;
+		sub.st = zproto_import(ZP, f.type);
+		sub.tbl_index = lua_gettop(L);
+		sub.deep = self->deep + 1;
+		lua_pushnil(L);	// prepare an iterator slot
+		int sz = zproto_encode(sub.st, args->value, args->length, encode, &sub);
+		lua_settop(L, sub.tbl_index - 1);	// pop the value
+		return sz;
 	}
 }
 
@@ -333,8 +359,8 @@ lencode(lua_State *L) {
 	int sz = lua_tointeger(L, lua_upvalueindex(2));
 	int tbl_index = 3;
 	int tag = lua_tointeger(L, 1);
-	struct zproto_type *ty = lua_touserdata(L, 2);
-	if (ty == NULL)
+	struct zproto_type *st = lua_touserdata(L, 2);
+	if (st == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	luaL_checktype(L, tbl_index, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);

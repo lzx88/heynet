@@ -52,4 +52,14 @@ function service.call(addr, ...)
 	return getResult(skynet.call(service[addr], "lua", ...))
 end
 
+function service.addTimer(interval, func, ...)
+	local ok, e = pcall(func, ...)
+	if not ok then
+		log("Raise error:\n%s", e)
+	end
+	skynet.timeout(interval, function()
+		service.addTimer(interval, func, ...)
+	end)
+end
+
 return service
