@@ -235,6 +235,7 @@ struct encode_ud {
 	lua_State *L;
 	struct zproto_type *st;
 	int tbl_index;
+	int iter;
 	int deep;
 };
 
@@ -247,8 +248,13 @@ encode(const struct zproto_encode_arg *args) {
 
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
-	if (f.key >= ZK_ARRAY){
-		if (args->value == NULL){
+	if (f.key != ZK_NULL) {
+		if (self->iter == -1) {
+			self->iter = 0;
+			lua_pop(L, 1);
+			return 0;
+		}
+		if (self->iter == 1){
 			lua_getfield(L, self->tbl_index, f.name);
 			if (lua_isnil(L, -1)) {
 				lua_pop(L, 1);
@@ -259,19 +265,14 @@ encode(const struct zproto_encode_arg *args) {
 				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
 					f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 			}
-			return 0;
 		}
-		else if (args->index == -1)	{
-			args->index = 0;
-			lua_pop(L, 1);
-			return 0;
-		}
-		assert(args->index != 0);
-		if (f.key > ZK_ARRAY) {
 
-		}			
-		else
-			lua_geti(L, -1, args->index);
+		assert(self->iter != 0);
+		if (f.key == ZK_ARRAY)
+			lua_geti(L, -1, self->iter);
+		else if (f.key == ZK_MAP) {
+
+		}
 	}
 	else
 		lua_getfield(L, self->tbl_index, f.name);

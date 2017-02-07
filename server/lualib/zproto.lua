@@ -36,12 +36,12 @@ function zproto:find(name)
     return self.__cache[name]
 end
 
-function sproto:encode(typename, tbl)
+function zproto:encode(typename, tbl)
     local proto = self:find(typename)
     return core.encode(proto.tag, proto.request, tbl)
 end
 
-function sproto:decode(typename, tbl)
+function zproto:decode(typename, tbl)
     local proto = self:find(typename)
     return core.decode(proto.tag, proto.request, tbl)
 end

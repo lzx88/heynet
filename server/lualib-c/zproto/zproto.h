@@ -6,8 +6,9 @@
 #define ZT_STRING -2
 #define ZT_INTEGER -1
 // >=0 自定义类型 type tag
-#define ZK_ARRAY  0
-#define ZK_NULL  -1
+#define ZK_ARRAY  1
+#define ZK_MAP  2
+#define ZK_NULL  0
 // ZK_MAP>0 自定义类型 field tag
 
 struct zproto;

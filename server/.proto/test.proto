@@ -1,6 +1,6 @@
 -- The protocol of zproto
 --1.字段tag从1开始
---2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
+--2.字段类型后边加[] 表示数组 而 加{} 表示map
 --3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
 --4.内建关键字为 number, string, bool, response 不允许作为 字段name
 --5.自定义类型可以内嵌自定义类型
@@ -8,13 +8,13 @@
 type{
 --2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
   field {
-    number name     = 1--2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
-    number type[]   = 3
+    string name     = 1--2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
+    bool type[]   = 3
   }
   nest3 {
     field type[]      = 3
   }  
-  field fields[name]  =2
+  field fields{}  =2
 }
 --2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
 

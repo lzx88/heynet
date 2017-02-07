@@ -46,7 +46,7 @@ local protocol = P {
     PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(name) * V"PROTO"),
     PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
     RESPONSE = namedpat("response", P"response" * (custompat(multipat(V"FIELD")) + blankpat"=" * typename)),
-    FIELD = namedpat("field", typename * blanks * name * (C"[]" + (P"[" * blankpat(name) * "]"))^-1 * blankpat"=" * tag),
+    FIELD = namedpat("field", typename * blanks * name * (C"[]" + C"{}")^-1 * blankpat"=" * tag),
 }
 local protofile = dummy * protocol * dummy * eof
 
@@ -73,10 +73,14 @@ local function checktype(all, ptype, t)
 end
 local convert = {}
 function convert.field(all, repeats, p, typename)
-    local f = { type = p[1], name = p[2], tag = p[3] }
-    if p[4] then
-        f.key = p[3]
+    local f = { type = p[1], name = p[2], tag = p[3], key = 0}
+   if p[4] then
         f.tag = p[4]
+        if p[3] == "[]" then
+            f.key == 1
+        elseif p[3] == "{}" then
+            f.key = 2
+        end
     end
     f.name = checkname(f.name)
     assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name)
@@ -85,11 +89,6 @@ function convert.field(all, repeats, p, typename)
     repeats[f.name] = true
     f.type = checktype(all, typename, f.type)
     assert(f.type, "Undefined type["..p[1].."] in field[".. typename ..".".. f.name.."].")
-
-    if f.key and f.key ~= "[]" then
-        assert(not buildin[f.type] and all.struct[f.type] and all.struct[f.type][f.key], "Undefined map key:"..f.key.." in field:"..typename.."."..f.name)
-    end
-
     return f
 end
 function convert.struct(all, obj)
@@ -178,17 +177,6 @@ local function link(all, result, filename)
     local function linkfield(f, T)
         if type(f.type) == "number" then
             return
-        end
-        if f.key then
-            if f.key = "[]" then
-                f.key = 0
-            else
-                local keyf = all.struct[f.type].field[f.key]
-                assert((type(keyf.type) == "number" and keyf.type < 0) or buildin[keyf.type], "Map key:"..f.key.." must be buildin type")
-                f.key = keyf.tag
-            end
-        else
-            f.key = -1
         end
         if not buildin[f.type] then
             for _,f in pairs(all.struct[f.type].field) do
