@@ -241,28 +241,60 @@ integer read_number(char* buf){
 	return -(n >> 1);
 }
 
+int
+encode_integer_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer, int size) {
+	if (size < 1)
+		return ZPROTO_CB_ERROR;
+	char* header = buffer;
+	char intlen = sizeof(uint32);
+	int sz = 0;
+	buffer += 1;
+	size -= 1;
+	int use = 1;
+	integer i;
+	args.value = &i;
+	for (;;) {
+		sz = cb(&args);
+		if (sz == ZPROTO_CB_NIL)
+			break;
+		if (sz >= 0) {
+			if (intlen == sizeof(uint32)) {
+				if (sz == sizeof(uint32)) {
+					if (intlen > size)
+						return -1;
+					*(uint32*)(buffer + (args->index - 1) * sizeof(uint32) ) = i;
+				}
+				else {
+					if (((args->index - 1) * sizeof(uint32))> size)
+						return -1;
+					use += (args->index - 1) * sizeof(uint32);
+					for (int idx = args->index - 1; idx > 0; --idx)
+						*(uint64*)(buffer + idx * sizeof(uint64)) = *(uint32*)(buffer + idx * sizeof(uint32));
+					intlen = sizeof(uint64);
+				}
+			}
+			if (intlen == sizeof(uint64)) {
+				sz = intlen;
+				if (intlen > size)
+					return -1;
+				*(uint64*)(buffer + (args->index - 1) * sizeof(uint64)) = i;
+			}
+		}
+		size -= intlen;
+		use += intlen;
+		++args->index;
+	}
+	*header = intlen;
+	return use;
+}
+
 static int
 encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size) {
-	args->value = NULL;
-	if(cb(args) < 0)
-		return ZPROTO_CB_ERROR;
-
 	int sz = 0;
 	const struct field &f = *args->pf;
-	args->value = data;
-	args->length = size;
-	args->index = 1;
 	switch (f.type) {
 	case ZT_INTEGER:
-		for (;;){
-			sz = cb(args);//sz为字节数
-			if (sz == ZPROTO_CB_NIL)
-				break;
-			if (args->index == 0)
-				break;
-			if (sz < 0)
-				return ZPROTO_CB_ERROR;
-		}
+		encode_integer_array(cb, args, data, size);
 		break;							
 	case ZT_BOOL:
 		for (;;) {
@@ -327,18 +359,13 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 	args.ud = ud;
 	for (int i = 0; i < ty->n; ++i) {
 		args.pf = &ty->f[i];
-		args.index = 0;
 		const struct field &f = ty->f[i];
 
 		if (f.tag != (lasttag + 1))
 			fdata[fidx++] = encode_tag(f.tag - lasttag - 1);
 	
-		if (f.key >= ZK_ARRAY){
-			sz = encode_array(cb, args, data, size);
-			if (sz >= 0)
-				fdata[fidx] = encode_integer(args->length);
-		}
-		else if (f.key == ZK_NULL){
+		if (f.key == ZK_NULL) {
+			args.index = 0;
 			switch (f.type) {
 			case ZT_INTEGER:
 			case ZT_BOOL:
@@ -347,7 +374,7 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				sz = cb(&args);
 				if (sz >= 0) {
 					fdata[fidx] = encode_integer(i);
-					if (fdata[fidx] == TAG_NULL){
+					if (fdata[fidx] == TAG_NULL) {
 						sz = sizeof(integer);
 						if (sz > size)
 							return -1;
@@ -364,6 +391,12 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				break;
 			}
 		}
+		else if (f.key == ZK_ARRAY || f.key == ZK_MAP){
+			args.index = 1;
+			sz = encode_array(cb, args, data, size);
+			if (sz >= 0)
+				fdata[fidx] = encode_integer(args->length);
+		}
 		else
 			assert(false);
 
@@ -373,7 +406,7 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 			data += sz;
 			size -= sz;
 		}
-		fidx++;
+		++fidx;
 		lasttag = f->tag;
 	}
 	assert(fidx == ty->maxn);

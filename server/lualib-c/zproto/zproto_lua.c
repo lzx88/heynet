@@ -262,8 +262,7 @@ encode(const struct zproto_encode_arg *args) {
 			}
 			if (!lua_istable(L, -1)) {
 				lua_pop(L, 1);
-				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
-					f.name, f.tag, lua_typename(L, lua_type(L, -1)));
+				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 			}
 		}
 
@@ -283,22 +282,22 @@ encode(const struct zproto_encode_arg *args) {
 	switch (f.type) {
 	case ZT_INTEGER:
 		int isnum;
-		integer v = lua_tointegerx(L, -1, &isnum);
+		lua_Integer v = lua_tointegerx(L, -1, &isnum);
 		if (!isnum)
-			return luaL_error(L, ".%s[%d] is not an integer (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a number (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		lua_pop(L, 1);
 		// notice: in lua 5.2, lua_Integer maybe 52bit
 		*(integer *)args->value = v;
 		return (v & ~0x7FffFFff) > 0 ? 8 : 4;
 	case ZT_BOOL:
 		if (!lua_isboolean(L, -1))
-			return luaL_error(L, ".%s[%d] is not a boolean (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a bool (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		*(integer *)args->value = lua_toboolean(L, -1);
 		lua_pop(L, 1);
-		return 1;
+		return 0;
 	case ZT_STRING:
 		if (!lua_isstring(L, -1))
-			return luaL_error(L, ".%s[%d] is not a string (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a string (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		size_t sz = 0;
 		const char *str = lua_tolstring(L, -1, &sz);
 		if (sz > args->length)
@@ -310,12 +309,14 @@ encode(const struct zproto_encode_arg *args) {
 		if (f.type < 0)
 			return luaL_error(L, "Invalid field type %s.%s", self->st->name, f.name);
 		if (!lua_istable(L, -1))
-			return luaL_error(L, ".%s[%d] is not a table (Is a %s)", f.name, args->index, lua_typename(L, lua_type(L, -1)));
+			return luaL_error(L, ".%s[%d] is not a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		struct encode_ud sub;
 		sub.L = L;
 		sub.st = zproto_import(ZP, f.type);
 		sub.tbl_index = lua_gettop(L);
 		sub.deep = self->deep + 1;
+		sub.iter = 0;
+
 		lua_pushnil(L);	// prepare an iterator slot
 		int sz = zproto_encode(sub.st, args->value, args->length, encode, &sub);
 		lua_settop(L, sub.tbl_index - 1);	// pop the value
@@ -329,8 +330,8 @@ lencode(lua_State *L) {
 	int sz = lua_tointeger(L, lua_upvalueindex(2));
 	int tbl_index = 3;
 	int tag = lua_tointeger(L, 1);
-	struct zproto_type *st = lua_touserdata(L, 2);
-	if (st == NULL)
+	struct zproto_type *ty = lua_touserdata(L, 2);
+	if (ty == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	luaL_checktype(L, tbl_index, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);
@@ -340,9 +341,10 @@ lencode(lua_State *L) {
 	self.L = L;
 
 	for (;;){
-		self.st = st;
+		self.zt = ty;
 		self.tbl_index = tbl_index;
 		self.deep = 0;
+		self.iter = 0;
 
 		lua_settop(L, tbl_index);
 		lua_pushnil(L);	// for iterator (stack slot 4)
