@@ -216,20 +216,6 @@ inline uint32 encode_integer(integer i){
 	return (i & ~0x3fFFffFF) ? TAG_NULL : (i << 2 & 3);
 }
 
-inline void encode_size(){
-	uint16 len = strlen(cstr);
-	write_buf(buf, &len, sizeof(len));
-	write_buf(buf, cstr, len + 1);
-}
-void encode_struct(zstruct* content, char* buf){
-	write_buf(buf, content->n, sizeof(content->n));
-	encode_tag(buf + 2, content->n, sizeof(content->n));
-}
-void encode_message(char* buf, size_t s, message* msg){
-	write_buf(buf, msg->head, sizeof(msg->head));
-	encode_struct(buf, msg->content);
-}
-
 uint16 read_tag(char* buf){
 	return *buf;
 }
@@ -242,7 +228,7 @@ integer read_number(char* buf){
 }
 
 int
-encode_integer_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer, int size) {
+encode_int_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer, int size) {
 	if (size < 1)
 		return ZPROTO_CB_ERROR;
 	char* header = buffer;
@@ -257,28 +243,28 @@ encode_integer_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer,
 		sz = cb(&args);
 		if (sz == ZPROTO_CB_NIL)
 			break;
-		if (sz >= 0) {
-			if (intlen == sizeof(uint32)) {
-				if (sz == sizeof(uint32)) {
-					if (intlen > size)
-						return -1;
-					*(uint32*)(buffer + (args->index - 1) * sizeof(uint32) ) = i;
-				}
-				else {
-					if (((args->index - 1) * sizeof(uint32))> size)
-						return -1;
-					use += (args->index - 1) * sizeof(uint32);
-					for (int idx = args->index - 1; idx > 0; --idx)
-						*(uint64*)(buffer + idx * sizeof(uint64)) = *(uint32*)(buffer + idx * sizeof(uint32));
-					intlen = sizeof(uint64);
-				}
-			}
-			if (intlen == sizeof(uint64)) {
-				sz = intlen;
+		if (sz < 0)
+			return sz;
+		if (intlen == sizeof(uint32)) {
+			if (sz == sizeof(uint32)) {
 				if (intlen > size)
-					return -1;
-				*(uint64*)(buffer + (args->index - 1) * sizeof(uint64)) = i;
+					return ZPROTO_CB_ERROR;
+				*(uint32*)(buffer + args->index * sizeof(uint32)) = i;
 			}
+			else {
+				if ((args->index * sizeof(uint32)) > size)
+					return ZPROTO_CB_ERROR;
+				use += args->index * sizeof(uint32);
+				for (int idx = args->index; idx >= 0; --idx)
+					*(uint64*)(buffer + idx * sizeof(uint64)) = *(uint32*)(buffer + idx * sizeof(uint32));
+				intlen = sizeof(uint64);
+			}
+		}
+		if (intlen == sizeof(uint64)) {
+			sz = intlen;
+			if (intlen > size)
+				return ZPROTO_CB_ERROR;
+			*(uint64*)(buffer + args->index * sizeof(uint64)) = i;
 		}
 		size -= intlen;
 		use += intlen;
@@ -289,61 +275,52 @@ encode_integer_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer,
 }
 
 static int
-encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *data, int size) {
-	int sz = 0;
+encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *buffer, int size) {
 	const struct field &f = *args->pf;
+	const char* head = buffer;
+	int sz;
 	switch (f.type) {
 	case ZT_INTEGER:
-		encode_integer_array(cb, args, data, size);
-		break;							
+		return encode_int_array(cb, args, buffer, size);
+		break;
 	case ZT_BOOL:
+		integer i;
+		args->value = &i;
 		for (;;) {
-			int v = 0;
-			args->value = &v;
-			args->length = sizeof(v);
 			sz = cb(args);
-			if (sz < 0) {
-				if (sz == SPROTO_CB_NIL)		// nil object , end of array
-					break;
-				if (sz == SPROTO_CB_NOARRAY)	// no array, don't encode it
-					return 0;
-				return -1;	// sz == SPROTO_CB_ERROR
-			}
-			if (size < 1)
-				return -1;
-			buffer[0] = v ? 1 : 0;
-			size -= 1;
-			buffer += 1;
+			if (sz == ZPROTO_CB_NIL)
+				break;
+			if (sz < 0)
+				return ZPROTO_CB_ERROR;
+			*buffer = i;
+			--size;
+			++buffer;
 			++args->index;
 		}
 		break;
 	default:
-		args->index = 1;
 		for (;;) {
 			if (size < SIZEOF_LENGTH)
-				return -1;
+				return ZPROTO_CB_ERROR;
 			size -= SIZEOF_LENGTH;
 			args->value = buffer + SIZEOF_LENGTH;
 			args->length = size;
 			sz = cb(args);
+			if (sz == ZPROTO_CB_NIL)
+				break;
 			if (sz < 0) {
-				if (sz == SPROTO_CB_NIL) {
-					break;
-				}
-				if (sz == SPROTO_CB_NOARRAY)	// no array, don't encode it
-					return 0;
-				return -1;	// sz == SPROTO_CB_ERROR
+				return ZPROTO_CB_ERROR;
+				*(uint16*)buffer = sz;
+				buffer += SIZEOF_LENGTH + sz;
+				size -= sz;
+				++args->index;
 			}
-			fill_size(buffer, sz);
-			buffer += SIZEOF_LENGTH + sz;
-			size -= sz;
-			++args->index;
+			break;
 		}
-		break;
 	}
-	sz = buffer - (data + SIZEOF_LENGTH);
-	return fill_size(data, sz);
+	return buffer - head;
 }
+
 int
 zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
 	int headlen = SIZEOF_LENGTH + sizeof(uint32) * ty->maxn;
@@ -365,7 +342,7 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 			fdata[fidx++] = encode_tag(f.tag - lasttag - 1);
 	
 		if (f.key == ZK_NULL) {
-			args.index = 0;
+			args.index = -1;
 			switch (f.type) {
 			case ZT_INTEGER:
 			case ZT_BOOL:
@@ -392,10 +369,10 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 			}
 		}
 		else if (f.key == ZK_ARRAY || f.key == ZK_MAP){
-			args.index = 1;
+			args.index = 0;
 			sz = encode_array(cb, args, data, size);
 			if (sz >= 0)
-				fdata[fidx] = encode_integer(args->length);
+				fdata[fidx] = encode_integer(args->index);
 		}
 		else
 			assert(false);
@@ -425,10 +402,10 @@ pack_seg(const char *src, char *buf, int sz, int n) {
 	if (sz < 0)
 		obuffer = NULL;
 
-	for (i=0;i<8;i++) {
+	for (i=0; i < 8; ++i) {
 		if (src[i] != 0) {
-			notzero++;
-			header |= 1<<i;
+			++notzero;
+			header |= 1 << i;
 			if (sz > 0) {
 				*buf = src[i];
 				++buf;
@@ -436,19 +413,13 @@ pack_seg(const char *src, char *buf, int sz, int n) {
 			}
 		}
 	}
-	if ((notzero == 7 || notzero == 6) && n > 0) {
+	if ((notzero == 7 || notzero == 6) && n > 0)
 		notzero = 8;
-	}
-	if (notzero == 8) {
-		if (n > 0) {
-			return 8;
-		} else {
-			return 10;
-		}
-	}
-	if (obuffer) {
+	if (notzero == 8)
+		return n > 0 ? 8 : 10
+
+	if (obuffer)
 		*obuffer = header;
-	}
 	return notzero + 1;
 }
 
@@ -468,18 +439,16 @@ write_ff(const char * src, char * des, int n) {
 int
 zproto_pack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 	char tmp[8];
-	int i;
-	const char * ff_srcstart = NULL;
+	int i, j, n, padding;
+	const char *ff_srcstart = NULL;
 	char * ff_desstart = NULL;
 	int ff_n = 0;
 	int size = 0;
-	const char * src = srcv;
-	char * buffer = bufferv;
-	for (i=0;i<srcsz;i+=8) {
-		int n;
-		int padding = i+8 - srcsz;
+	const char *src = srcv;
+	char *buffer = bufferv;
+	for (i=0; i < srcsz; i += 8) {
+		padding = i+8 - srcsz;
 		if (padding > 0) {
-			int j;
 			memcpy(tmp, src, 8-padding);
 			for (j=0;j<padding;j++) {
 				tmp[7-j] = 0;

@@ -235,26 +235,20 @@ struct encode_ud {
 	lua_State *L;
 	struct zproto_type *st;
 	int tbl_index;
-	int iter;
 	int deep;
 };
 
 static int
 encode(const struct zproto_encode_arg *args) {
 	struct encode_ud *self = args->ud;
-	lua_State *L = self->L;
 	const struct zproto_type *zt = self->st;
 	const struct field &f = *args->pf;
+	lua_State *L = self->L;
 
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
 	if (f.key != ZK_NULL) {
-		if (self->iter == -1) {
-			self->iter = 0;
-			lua_pop(L, 1);
-			return 0;
-		}
-		if (self->iter == 1){
+		if (args->index == 0){
 			lua_getfield(L, self->tbl_index, f.name);
 			if (lua_isnil(L, -1)) {
 				lua_pop(L, 1);
@@ -265,12 +259,38 @@ encode(const struct zproto_encode_arg *args) {
 				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 			}
 		}
-
-		assert(self->iter != 0);
 		if (f.key == ZK_ARRAY)
-			lua_geti(L, -1, self->iter);
+			lua_geti(L, -1, args->index + 1);
 		else if (f.key == ZK_MAP) {
-
+			lua_pushnil(L);
+			if (!lua_next(L, -2)) {
+				// iterate end
+				lua_pop(L, 1);
+				return ZPROTO_CB_NIL;
+			}
+			if (lua_isinteger(L, -2)) {
+				char tmp[8] = { 0 };
+				sz = sprintf(tmp, "%d", lua_tointeger(L, -2));
+				if (sz > args->length)
+					return ZPROTO_CB_ERROR;
+				memcpy(args->value, tmp, sz);
+			}
+			else(lua_isstring()) {
+				size_t sz = 0;
+				const char *str = lua_tolstring(L, -2, &sz);
+				if (sz > args->length)
+					return ZPROTO_CB_ERROR;
+				memcpy(args->value, str, sz);
+			}
+			else
+				return luaL_error(L, ".*%s(%d) should be a map key type (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
+			lua_remove(L, -2);
+		}
+		else
+			assert(false);
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 2);
+			return ZPROTO_CB_NIL;
 		}
 	}
 	else
