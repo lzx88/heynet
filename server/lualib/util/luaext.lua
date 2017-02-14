@@ -80,13 +80,25 @@ function val2str(arg1, arg2)
         for i = 1, n do
            str = str .. "  "
         end
-        k = k and '["'.. k .. '"] = ' or ""
+        k = k and k .. ' = ' or ""
         local t = type(v)
         if t == "table" then
             str = str .. k .. "{\n"
             n = n + 1
-            for k_,v_ in pairs(v) do
+            local s = 0
+            for k_,v_ in ipairs(v) do
                 _2str(v_, k_, n)
+                s = k_
+            end
+            for k_,v_ in pairs(v) do
+                if type(k_) == "number" and k_ > s then
+                    _2str(v_, k_, n)
+                end
+            end
+            for k_,v_ in pairs(v) do
+                if type(k_) ~= "number" then
+                    _2str(v_, k_, n)
+                end
             end
             n = n - 1
             for i = 1, n do
