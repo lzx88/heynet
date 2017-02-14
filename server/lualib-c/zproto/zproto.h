@@ -19,6 +19,7 @@ struct zproto_arg {
 	int length;
 	void *ud;
 	int index;
+	char endian;
 };
 
 #define ZPROTO_CB_ERROR		-1
@@ -26,5 +27,5 @@ struct zproto_arg {
 #define ZPROTO_CB_NOARRAY	-3
 
 int zproto_encode(const zproto_type *ty, void *buffer, int size, zproto_cb cb, void *ud);
-typedef int(*zproto_cb)(const zproto_arg *args);
+typedef int(*zproto_cb)(const struct zproto_arg *args);
 #endif

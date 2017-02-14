@@ -41,8 +41,8 @@ function zproto:encode(typename, tbl)
     return core.encode(proto.tag, proto.request, tbl)
 end
 
-function zproto:decode(tag, data)
-    return core.decode(tag, data)
+function zproto:decode(ty, data)
+    return core.decode(ty, data)
 end
 
 

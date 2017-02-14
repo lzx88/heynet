@@ -181,12 +181,12 @@ test_endian(){
 	u.s = 1;
 	return u.c == 1 ? "L" : "B";
 }
-
+static char G_Endian = test_endian();
 
 #pragma pack(1)
 struct header{
 	const char[7] magic = "Z-PROTO";
-	const char endian = test_endian();
+	const char endian = G_Endian;
 	uint16 nbytes;//包体字节数 最大64k
 	uint16 msgid;//消息ID
 	uint32 session;//会话标识
@@ -203,28 +203,30 @@ void write_buf(char* buf, char* data, size_t len){
 }
 
 #define TAG_NULL 1
-#define SIZEOF_LENGTH sizeof(uint16)
+#define SIZE_HEADER 2
+#define SIZE_FEILD 4
 
-inline uint32 encode_tag(uint32 tag){
+static inline uint32 
+encode_tag(uint32 tag){
 	assert(tag > 0 && tag < 0x40000000);
 	return tag << 2 & 1;
 }
-inline uint32 encode_integer(integer i){
+static inline uint32 
+encode_integer(integer i){
 	if (i >= 0)
 		return (i & ~0x7fFFffFF) ? TAG_NULL : (i << 1);
 	i = -i;
 	return (i & ~0x3fFFffFF) ? TAG_NULL : (i << 2 & 3);
 }
 
-uint16 read_tag(char* buf){
-	return *buf;
+static inline uint16
+shift16(const char* p) {
+	return p[1] | p[0] << 8;
 }
-integer read_number(char* buf){
-	uint32 n = 0;
-	memcpy(&n, buf, sizeof(n));
-	if (n & 1)
-		return n >> 1;
-	return -(n >> 1);
+
+static inline uint32
+shift32(const char *p) {
+	return p[3] | p[2] << 8 | p[1] << 16 | p[0] << 24;
 }
 
 int
@@ -273,7 +275,6 @@ encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) 
 	*header = intlen;
 	return use;
 }
-
 static int
 encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	const struct field &f = *args->pf;
@@ -300,10 +301,10 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 		break;
 	default:
 		for (;;) {
-			if (size < SIZEOF_LENGTH)
+			if (size < SIZE_HEADER)
 				return ZPROTO_CB_ERROR;
-			size -= SIZEOF_LENGTH;
-			args->value = buffer + SIZEOF_LENGTH;
+			size -= SIZE_HEADER;
+			args->value = buffer + SIZE_HEADER;
 			args->length = size;
 			sz = cb(args);
 			if (sz == ZPROTO_CB_NIL)
@@ -311,7 +312,7 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 			if (sz < 0) {
 				return ZPROTO_CB_ERROR;
 				*(uint16*)buffer = sz;
-				buffer += SIZEOF_LENGTH + sz;
+				buffer += SIZE_HEADER + sz;
 				size -= sz;
 				++args->index;
 			}
@@ -320,21 +321,21 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	}
 	return buffer - head;
 }
-
 int
 zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
-	int headlen = SIZEOF_LENGTH + sizeof(uint32) * ty->maxn;
+	int i;
+	int headlen = SIZE_HEADER + ty->maxn * SIZE_FEILD;
 	if (headlen < size)
 		return -1;
 	size -= headlen;
-	uint32 *fdata = buffer + SIZEOF_LENGTH;
+	uint32 *fdata = buffer + SIZE_HEADER;
 	char *data = buffer + headlen;
 	*(uint16*)buffer = ty->maxn;
 
 	int fidx = 0, lasttag = 0, sz = 0;
 	struct zproto_arg args;
 	args.ud = ud;
-	for (int i = 0; i < ty->n; ++i) {
+	for (i = 0; i < ty->n; ++i) {
 		args.pf = &ty->f[i];
 		const struct field &f = ty->f[i];
 
@@ -391,22 +392,15 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 }
 
 int
-zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, void *ud) {
-	struct sproto_arg args;
-	int total = size;
-	uint8_t * stream;
-	uint8_t * datastream;
-	int fn;
-	int i;
-	int tag;
-	if (size < SIZEOF_HEADER)
+zproto_decode(const struct type *ty, const void *data, size_t size, zproto_cb cb, void *ud) {
+	const char *stream = data;
+	struct zproto_arg args;
+	uint16 fn;
+	if (size < SIZE_HEADER)
 		return -1;
-	// debug print
-	// printf("sproto_decode[%p] (%s)\n", ud, st->name);
-	stream = (void *)data;
 	fn = toword(stream);
-	stream += SIZEOF_HEADER;
-	size -= SIZEOF_HEADER;
+	stream += SIZE_HEADER;
+	size -= SIZE_HEADER;
 	if (size < fn * SIZEOF_FIELD)
 		return -1;
 	datastream = stream + fn * SIZEOF_FIELD;
@@ -427,13 +421,13 @@ zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, v
 		currentdata = datastream;
 		if (value < 0) {
 			uint32_t sz;
-			if (size < SIZEOF_LENGTH)
+			if (size < SIZE_HEADER)
 				return -1;
 			sz = todword(datastream);
-			if (size < sz + SIZEOF_LENGTH)
+			if (size < sz + SIZE_HEADER)
 				return -1;
-			datastream += sz + SIZEOF_LENGTH;
-			size -= sz + SIZEOF_LENGTH;
+			datastream += sz + SIZE_HEADER;
+			size -= sz + SIZE_HEADER;
 		}
 		f = findtag(ty, tag);
 		if (f == NULL)
@@ -455,7 +449,7 @@ zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, v
 				case SPROTO_TINTEGER: {
 										  uint32_t sz = todword(currentdata);
 										  if (sz == sizeof(uint32_t)) {
-											  uint64_t v = expand64(todword(currentdata + SIZEOF_LENGTH));
+											  uint64_t v = expand64(todword(currentdata + SIZE_HEADER));
 											  args.value = &v;
 											  args.length = sizeof(v);
 											  cb(&args);
@@ -464,8 +458,8 @@ zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, v
 											  return -1;
 										  }
 										  else {
-											  uint32_t low = todword(currentdata + SIZEOF_LENGTH);
-											  uint32_t hi = todword(currentdata + SIZEOF_LENGTH + sizeof(uint32_t));
+											  uint32_t low = todword(currentdata + SIZE_HEADER);
+											  uint32_t hi = todword(currentdata + SIZE_HEADER + sizeof(uint32_t));
 											  uint64_t v = (uint64_t)low | (uint64_t)hi << 32;
 											  args.value = &v;
 											  args.length = sizeof(v);
@@ -476,7 +470,7 @@ zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, v
 				case SPROTO_TSTRING:
 				case SPROTO_TSTRUCT: {
 										 uint32_t sz = todword(currentdata);
-										 args.value = currentdata + SIZEOF_LENGTH;
+										 args.value = currentdata + SIZE_HEADER;
 										 args.length = sz;
 										 if (cb(&args))
 											 return -1;
@@ -517,7 +511,7 @@ pack_seg(const char *src, int slen, char *des, int dlen) {
 	}
 	return nozero + 1;
 }
-static int
+static inline int
 pack_seg_ff(const char *src, int slen, char *des) {
 	int nozero = 0;
 	int i;
@@ -608,7 +602,6 @@ zproto_unpack(const char *src, int slen, char *des, int dlen) {
 	}
 	return buf - des;
 }
-//
 //int test(void) {
 //	// your code goes here
 //	char des[2048];
@@ -616,18 +609,18 @@ zproto_unpack(const char *src, int slen, char *des, int dlen) {
 //	char src[1024];
 //	for (int i = 0; i < 1024; ++i)
 //	{
-//		if (rand() % 2 == 1)
-//			src[i] = rand() % 256;
-//		else
+//		if (rand() % 8 > 0)
 //			src[i] = 0;
+//		else
+//			src[i] = rand() % 256;
 //	}
 //	int n = zproto_pack(src, 1024, des, 2048);
-//	printf("%d", n);
+//	printf("%d\n", n);
 //	assert(1024 == zproto_unpack(des, n, des2, 1500));
 //	for (int i = 0; i < 1024; ++i)
 //	{
 //		assert(des2[i] == src[i]);
 //	}
-//
+//	Sleep(500);
 //	return 0;
 //}

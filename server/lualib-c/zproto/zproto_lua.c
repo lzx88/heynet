@@ -350,7 +350,7 @@ lencode(lua_State *L) {
 	int sz = lua_tointeger(L, lua_upvalueindex(2));
 	int tbl_index = 3;
 	int tag = lua_tointeger(L, 1);
-	struct zproto_type *ty = lua_touserdata(L, 2);
+	const struct zproto_type *ty = lua_touserdata(L, 2);
 	if (ty == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	luaL_checktype(L, tbl_index, LUA_TTABLE);
@@ -385,36 +385,146 @@ lencode(lua_State *L) {
 	return 0;//nohere
 }
 
+struct decode_ud {
+	lua_State *L;
+	const char *array_tag;
+	int array_index;
+	int result_index;
+	int deep;
+	int mainindex_tag;
+	int key_index;
+};
+
+static int
+decode(const struct zproto_arg *args) {
+	struct decode_ud *self = args->ud;
+	lua_State *L = self->L;
+	if (self->deep >= ENCODE_DEEPLEVEL)
+		return luaL_error(L, "The table is too deep");
+	if (args->index != 0) {
+		// It's array
+		if (args->tagname != self->array_tag) {
+			self->array_tag = args->tagname;
+			lua_newtable(L);
+			lua_pushvalue(L, -1);
+			lua_setfield(L, self->result_index, args->tagname);
+			if (self->array_index) {
+				lua_replace(L, self->array_index);
+			}
+			else {
+				self->array_index = lua_gettop(L);
+			}
+			if (args->index < 0) {
+				// It's a empty array, return now.
+				return 0;
+			}
+		}
+	}
+	switch (args->type) {
+	case SPROTO_TINTEGER: {
+							  // notice: in lua 5.2, 52bit integer support (not 64)
+							  lua_Integer v = *(uint64_t*)args->value;
+							  lua_pushinteger(L, v);
+							  break;
+	}
+	case SPROTO_TBOOLEAN: {
+							  int v = *(uint64_t*)args->value;
+							  lua_pushboolean(L, v);
+							  break;
+	}
+	case SPROTO_TSTRING: {
+							 lua_pushlstring(L, args->value, args->length);
+							 break;
+	}
+	case SPROTO_TSTRUCT: {
+							 struct decode_ud sub;
+							 int r;
+							 lua_newtable(L);
+							 sub.L = L;
+							 sub.result_index = lua_gettop(L);
+							 sub.deep = self->deep + 1;
+							 sub.array_index = 0;
+							 sub.array_tag = NULL;
+							 if (args->mainindex >= 0) {
+								 // This struct will set into a map, so mark the main index tag.
+								 sub.mainindex_tag = args->mainindex;
+								 lua_pushnil(L);
+								 sub.key_index = lua_gettop(L);
+
+								 r = sproto_decode(args->subtype, args->value, args->length, decode, &sub);
+								 if (r < 0)
+									 return SPROTO_CB_ERROR;
+								 if (r != args->length)
+									 return r;
+								 lua_pushvalue(L, sub.key_index);
+								 if (lua_isnil(L, -1)) {
+									 luaL_error(L, "Can't find main index (tag=%d) in [%s]", args->mainindex, args->tagname);
+								 }
+								 lua_pushvalue(L, sub.result_index);
+								 lua_settable(L, self->array_index);
+								 lua_settop(L, sub.result_index - 1);
+								 return 0;
+							 }
+							 else {
+								 sub.mainindex_tag = -1;
+								 sub.key_index = 0;
+								 r = sproto_decode(args->subtype, args->value, args->length, decode, &sub);
+								 if (r < 0)
+									 return SPROTO_CB_ERROR;
+								 if (r != args->length)
+									 return r;
+								 lua_settop(L, sub.result_index);
+								 break;
+							 }
+	}
+	default:
+		luaL_error(L, "Invalid type");
+	}
+	if (args->index > 0) {
+		lua_seti(L, self->array_index, args->index);
+	}
+	else {
+		if (self->mainindex_tag == args->tagid) {
+			// This tag is marked, save the value to key_index
+			// assert(self->key_index > 0);
+			lua_pushvalue(L, -1);
+			lua_replace(L, self->key_index);
+		}
+		lua_setfield(L, self->result_index, args->tagname);
+	}
+
+	return 0;
+}
+static const void *
+getbuffer(lua_State *L, int index, size_t *sz) {
+	int t = lua_type(L, index);
+	if (t == LUA_TSTRING)
+		return lua_tolstring(L, index, sz);
+	if (t != LUA_TUSERDATA && t != LUA_TLIGHTUSERDATA)
+		luaL_argerror(L, index, "Need a string or userdata");
+	*sz = luaL_checkinteger(L, index + 1);
+	return lua_touserdata(L, index);
+}
 static int
 ldecode(lua_State *L) {
-	struct zproto_type* ty = lua_touserdata(L, 1);
-	const void *buffer;
+	const struct zproto_type* ty;
+	const void *data;
 	struct decode_ud self;
 	size_t sz;
-	int r;
-	if (ty == NULL) {
-		return luaL_argerror(L, 1, "Need a sproto_type object");
-	}
-	sz = 0;
-	buffer = getbuffer(L, 2, &sz);
-	if (!lua_istable(L, -1)) {
+	ty = lua_touserdata(L, 1);
+	if (!ty)
+		return luaL_argerror(L, 1, "Need a zproto_type object");
+	data = getbuffer(L, 2, &sz);
+	if (!lua_istable(L, -1))
 		lua_newtable(L);
-	}
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
 	self.L = L;
 	self.result_index = lua_gettop(L);
-	self.array_index = 0;
-	self.array_tag = NULL;
 	self.deep = 0;
-	self.mainindex_tag = -1;
-	self.key_index = 0;
-	r = sproto_decode(ty, buffer, (int)sz, decode, &self);
-	if (r < 0) {
+	if (0 > zproto_decode(ty, data, sz, decode, &self));
 		return luaL_error(L, "decode error");
-	}
 	lua_settop(L, self.result_index);
-	lua_pushinteger(L, r);
-	return 2;
+	return 1;
 }
 
 static int
