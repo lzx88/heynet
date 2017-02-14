@@ -13,7 +13,7 @@
 struct zproto;
 typedef struct type zproto_type;
 typedef struct field zproto_field;
-struct zproto_encode_arg {
+struct zproto_arg {
 	const zproto_field *pf;
 	void *value;
 	int length;
@@ -26,5 +26,5 @@ struct zproto_encode_arg {
 #define ZPROTO_CB_NOARRAY	-3
 
 int zproto_encode(const zproto_type *ty, void *buffer, int size, zproto_cb cb, void *ud);
-typedef int(*zproto_cb)(const zproto_encode_arg *args);
+typedef int(*zproto_cb)(const zproto_arg *args);
 #endif

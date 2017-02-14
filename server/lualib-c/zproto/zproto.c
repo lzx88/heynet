@@ -228,7 +228,7 @@ integer read_number(char* buf){
 }
 
 int
-encode_int_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer, int size) {
+encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) {
 	if (size < 1)
 		return ZPROTO_CB_ERROR;
 	char* header = buffer;
@@ -275,7 +275,7 @@ encode_int_array(zproto_cb cb, struct zproto_encode_arg *args, char* buffer, int
 }
 
 static int
-encode_array(zproto_cb cb, struct zproto_encode_arg *args, char *buffer, int size) {
+encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	const struct field &f = *args->pf;
 	const char* head = buffer;
 	int sz;
@@ -332,7 +332,7 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 	*(uint16*)buffer = ty->maxn;
 
 	int fidx = 0, lasttag = 0, sz = 0;
-	struct zproto_encode_arg args;
+	struct zproto_arg args;
 	args.ud = ud;
 	for (int i = 0; i < ty->n; ++i) {
 		args.pf = &ty->f[i];
@@ -390,6 +390,116 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 	return data - buffer;
 }
 
+int
+zproto_decode(const struct type *ty, const void *data, int size, zproto_cb cb, void *ud) {
+	struct sproto_arg args;
+	int total = size;
+	uint8_t * stream;
+	uint8_t * datastream;
+	int fn;
+	int i;
+	int tag;
+	if (size < SIZEOF_HEADER)
+		return -1;
+	// debug print
+	// printf("sproto_decode[%p] (%s)\n", ud, st->name);
+	stream = (void *)data;
+	fn = toword(stream);
+	stream += SIZEOF_HEADER;
+	size -= SIZEOF_HEADER;
+	if (size < fn * SIZEOF_FIELD)
+		return -1;
+	datastream = stream + fn * SIZEOF_FIELD;
+	size -= fn * SIZEOF_FIELD;
+	args.ud = ud;
+
+	tag = -1;
+	for (i = 0; i < fn; i++) {
+		uint8_t * currentdata;
+		struct field * f;
+		int value = toword(stream + i * SIZEOF_FIELD);
+		++tag;
+		if (value & 1) {
+			tag += value / 2;
+			continue;
+		}
+		value = value / 2 - 1;
+		currentdata = datastream;
+		if (value < 0) {
+			uint32_t sz;
+			if (size < SIZEOF_LENGTH)
+				return -1;
+			sz = todword(datastream);
+			if (size < sz + SIZEOF_LENGTH)
+				return -1;
+			datastream += sz + SIZEOF_LENGTH;
+			size -= sz + SIZEOF_LENGTH;
+		}
+		f = findtag(ty, tag);
+		if (f == NULL)
+			continue;
+		args.tagname = f->name;
+		args.tagid = f->tag;
+		args.type = f->type & ~SPROTO_TARRAY;
+		args.subtype = f->st;
+		args.index = 0;
+		args.mainindex = f->key;
+		if (value < 0) {
+			if (f->type & SPROTO_TARRAY) {
+				if (decode_array(cb, &args, currentdata)) {
+					return -1;
+				}
+			}
+			else {
+				switch (f->type) {
+				case SPROTO_TINTEGER: {
+										  uint32_t sz = todword(currentdata);
+										  if (sz == sizeof(uint32_t)) {
+											  uint64_t v = expand64(todword(currentdata + SIZEOF_LENGTH));
+											  args.value = &v;
+											  args.length = sizeof(v);
+											  cb(&args);
+										  }
+										  else if (sz != sizeof(uint64_t)) {
+											  return -1;
+										  }
+										  else {
+											  uint32_t low = todword(currentdata + SIZEOF_LENGTH);
+											  uint32_t hi = todword(currentdata + SIZEOF_LENGTH + sizeof(uint32_t));
+											  uint64_t v = (uint64_t)low | (uint64_t)hi << 32;
+											  args.value = &v;
+											  args.length = sizeof(v);
+											  cb(&args);
+										  }
+										  break;
+				}
+				case SPROTO_TSTRING:
+				case SPROTO_TSTRUCT: {
+										 uint32_t sz = todword(currentdata);
+										 args.value = currentdata + SIZEOF_LENGTH;
+										 args.length = sz;
+										 if (cb(&args))
+											 return -1;
+										 break;
+				}
+				default:
+					return -1;
+				}
+			}
+		}
+		else if (f->type != SPROTO_TINTEGER && f->type != SPROTO_TBOOLEAN) {
+			return -1;
+		}
+		else {
+			uint64_t v = value;
+			args.value = &v;
+			args.length = sizeof(v);
+			cb(&args);
+		}
+	}
+	return total - size;
+}
+
 static int
 pack_seg(const char *src, int slen, char *des, int dlen) {
 	int nozero = 0;
@@ -423,8 +533,7 @@ pack_seg_ff(const char *src, int slen, char *des) {
 }
 int
 zproto_pack(const char* src, int slen, char *des, int sz) {
-	char *buf = des;
-	char *ffp;
+	char *ffp, *buf = des;
 	int i, n, ffn = 0;
 	for (i = 0; i < slen; i += 8) {
 		if (ffn == 0) {
@@ -446,14 +555,14 @@ zproto_pack(const char* src, int slen, char *des, int sz) {
 			if (sz < 8)
 				return -1;
 			n = pack_seg_ff(src, slen - i, buf);
-			*ffp = ffn;
 			if (n >= 6 && ffn < 256){
+				*ffp = ffn;
 				++ffn;
 				n = 8;
 			}
 			else {
-				n = pack_seg(src, slen - i, buf, sz);
 				ffn = 0;
+				n = pack_seg(src, slen - i, buf, sz);
 			}
 		}
 		src += 8;
