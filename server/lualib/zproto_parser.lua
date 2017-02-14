@@ -77,7 +77,7 @@ function convert.field(all, repeats, p, typename)
    if p[4] then
         f.tag = p[4]
         if p[3] == "[]" then
-            f.key == 1
+            f.key = 1
         elseif p[3] == "{}" then
             f.key = 2
         end

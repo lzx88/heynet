@@ -41,9 +41,8 @@ function zproto:encode(typename, tbl)
     return core.encode(proto.tag, proto.request, tbl)
 end
 
-function zproto:decode(typename, tbl)
-    local proto = self:find(typename)
-    return core.decode(proto.tag, proto.request, tbl)
+function zproto:decode(tag, data)
+    return core.decode(tag, data)
 end
 
 

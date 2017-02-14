@@ -381,8 +381,50 @@ lencode(lua_State *L) {
 			lua_pushlstring(L, buffer, use);
 			return 1;
 		}
-	}	
+	}
 	return 0;//nohere
+}
+
+static int
+ldecode(lua_State *L) {
+	struct zproto_type* ty = lua_touserdata(L, 1);
+	const void *buffer;
+	struct decode_ud self;
+	size_t sz;
+	int r;
+	if (ty == NULL) {
+		return luaL_argerror(L, 1, "Need a sproto_type object");
+	}
+	sz = 0;
+	buffer = getbuffer(L, 2, &sz);
+	if (!lua_istable(L, -1)) {
+		lua_newtable(L);
+	}
+	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
+	self.L = L;
+	self.result_index = lua_gettop(L);
+	self.array_index = 0;
+	self.array_tag = NULL;
+	self.deep = 0;
+	self.mainindex_tag = -1;
+	self.key_index = 0;
+	r = sproto_decode(ty, buffer, (int)sz, decode, &self);
+	if (r < 0) {
+		return luaL_error(L, "decode error");
+	}
+	lua_settop(L, self.result_index);
+	lua_pushinteger(L, r);
+	return 2;
+}
+
+static int
+lpack(lua_State *L) {
+	return 1;
+}
+
+static int
+lunpack(lua_State *L) {
+	return 1;
 }
 
 int

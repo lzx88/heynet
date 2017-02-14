@@ -405,10 +405,10 @@ pack_seg(const char *src, int slen, char *des, int dlen) {
 			des[++nozero] = src[i];
 		}
 	}
-	return nozero;
+	return nozero + 1;
 }
 static int
-pack_seg_ff(const char *src, int slen, char *des, int dlen) {
+pack_seg_ff(const char *src, int slen, char *des) {
 	int nozero = 0;
 	int i;
 	for (i = 0; i < 8; ++i) {
@@ -431,29 +431,30 @@ zproto_pack(const char* src, int slen, char *des, int sz) {
 			n = pack_seg(src, slen - i, buf, sz);
 			if (n < 0)
 				return -1;
-			if (n == 8)	{
+			if (n == 9)	{
 				if (sz < 10)
 					return -1;
 				ffp = buf + 1;
-				for (; n > 0; --n)
+				for (n = 8; n > 0; --n)
 					*(ffp + n) = *(buf + n);
 				*ffp = 0;
 				ffn = 1;
 				n = 10;
 			}
-			else
-				++n;
 		}
 		else {
 			if (sz < 8)
 				return -1;
-			n = pack_seg_ff(src, slen - i, buf, sz);
+			n = pack_seg_ff(src, slen - i, buf);
 			*ffp = ffn;
-			if (n >= 6 && ffn < 256)
+			if (n >= 6 && ffn < 256){
 				++ffn;
-			else
+				n = 8;
+			}
+			else {
+				n = pack_seg(src, slen - i, buf, sz);
 				ffn = 0;
-			n = 8;
+			}
 		}
 		src += 8;
 		buf += n;
@@ -472,19 +473,18 @@ zproto_unpack(const char *src, int slen, char *des, int dlen) {
 			if (--slen < 0)
 				return -2;
 			n = ((unsigned char)*src + 1) << 3;
-			++src;
 			if (slen < n)
 				return -2;
-			slen -= n;
 			if (dlen < n)
 				return -1;
+			memcpy(buf, ++src, n);
+			slen -= n;
 			dlen -= n;
-			memcpy(buf, src, n);
 			buf += n;
 			src += n;
 		}
 		else {
-			for (i = 0; i < 8; i++) {
+			for (i = 0; i < 8; ++i) {
 				if (--dlen < 0)
 					return -1;
 				if ((seg0 >> i) & 1) {
