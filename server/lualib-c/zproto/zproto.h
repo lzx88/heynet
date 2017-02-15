@@ -19,7 +19,7 @@ struct zproto_arg {
 	int length;
 	void *ud;
 	int index;
-	char endian;
+	bool shift;
 };
 
 #define ZPROTO_CB_ERROR		-1
