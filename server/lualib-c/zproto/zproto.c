@@ -240,7 +240,6 @@ encode_int(int n) {
 	n = -n;
 	return (n > 0x3fFFffFF) ? NULL_CODE : (n << 2 & 1);
 }
-
 #define decode_uint(v) (v) >> 1//+
 #define decode_int(v) -((v) >> 2)//-
 #define decode_tag(v) (v) >> 3
@@ -419,26 +418,24 @@ static int32 decode_int32(const char* p, bool shift){ return shift ? shift32(p) 
 static int64 decode_int64(const char* p, bool shift){ return shift ? shift64(p) : *(int64*)p; }
 
 static int
-decode_object(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size, int index){
-	if (*size < SIZE_HEADER)
+decode_key(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size){
+	args->idx = -1;
+	args->val = *stream;
+	args->len = 1 + strlen(*stream);
+	if (*size < args->len)
 		return -1;
-	args->idx = index;
-	args->len = decode_int16(*stream, args->shift);
-	args->val = *stream + SIZE_HEADER;
-	index = args->len + SIZE_HEADER;
-	if (*size < index)
-		return -1;
-	*size -= index;
-	*stream += index;
 	cb(args);
-	return index;
+	*size -= args->len;
+	*stream += args->len;
+	return args->len;
 }
 static int
-decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size, int count) {
+decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size) {
 	const struct field *f = args->pf;
 	int sz = size;
-	int n, i;
+	int n;
 	integer intv;
+	args->idx = 1;
 	switch (f->type) {
 	case ZT_INTEGER:
 		if (--sz < 0)
@@ -446,39 +443,39 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 		n = *stream++;
 		if (n != 8 && n != 4)
 			return -2;
-		i = n * count;
-		if (sz < i)
-			return -1;
-		sz -= i;
-		for (i = 0; i < count; ++i) {
-			if (f->key == ZK_MAP && decode_object(cb, args, &stream, &sz, -1) < 0)
+		for (; sz > 0; sz -= n, ++args->idx) {
+			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			intv = n == 4 ? decode_int32(stream, args->shift) : decode_int64(stream, args->shift);
 			args->val = &intv;
-			args->idx = i + 1;
 			cb(args);
 			stream += n;
 		}
 		break;
 	case ZT_BOOL:
-		if (sz < count)
-			return -1;
-		sz -= count;
-		for (i = 0; i < count; ++i) {
-			if (f->key == ZK_MAP && decode_object(cb, args, &stream, &sz, -1) < 0)
+		for (; sz > 0; --sz, ++args->idx) {
+			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
-			args->idx = i + 1;
-			args->val = *stream++;
+			args->val = *stream;
 			cb(args);
+			++stream;
 		}
 		break;
 	default:
-		assert(f->type == ZT_STRING || f->type > 0);
-		for (i = 0; i < count; ++i) {
-			if (f->key == ZK_MAP && decode_object(cb, args, &stream, &sz, -1) < 0)
+		if (f->type != ZT_STRING && f->type < 0)
+			return -3;
+		for (; sz > 0; sz -= n, ++args->idx) {
+			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
-			if (decode_object(cb, args, &stream, &sz, i + 1) < 0)
+			if (sz < SIZE_HEADER)
 				return -1;
+			args->len = decode_int16(stream);
+			args->val = stream + SIZE_HEADER;
+			n = args->len + SIZE_HEADER;
+			if (size < n)
+				return -1;
+			cb(args);
+			*stream += n;
 		}
 	}	
 	return size - sz;
@@ -489,7 +486,6 @@ zproto_decode(const struct type *ty, const void *data, size_t size, char endian,
 	struct zproto_arg args;
 	uint16 fn;
 	uint32 val;
-	integer intv;
 	int i, tag, sz;
 	struct field *f;
 	args.ud = ud;
@@ -507,46 +503,44 @@ zproto_decode(const struct type *ty, const void *data, size_t size, char endian,
 	tag = 0;
 	for (i = 0; i < fn ; ++i) {
 		args.idx = 0;
-		sz = 0;
 		val = decode_int32(streamf + i * SIZE_FIELD, args.shift);
 		if (val & 7 == 7) {//tag
 			tag += decode_tag(val);
 			continue;
 		}
+		sz = (val & 7 == 3) ? decode_len(val) : 0;//len
+		if (size < sz)
+			return -1;
 		f = findtag(ty, ++tag);
-		if (f == NULL)//跳过无法识别的域
+		if (f == NULL) {//ignore
+			streamd += sz;
+			size -= sz;
 			continue;
+		}
 		args.pf = f;
 		if (f->key != ZK_NULL) {//array
-			val = decode_uint(val);
-			if (val > 0) {
-				sz = decode_array(cb, &args, streamd, size, val)
-				if (sz < 0)
-					return sz;
-			}
+			if (sz > 0 && sz != decode_array(cb, &args, streamd, sz))
+				return -1;
 		}
 		else {
 			switch (f->type) {
 			case ZT_INTEGER:
+				integer intv;
 				if (val & 1 == 0)//+
 					intv = decode_uint(val);
-				else if (val == NULL_CODE) {
-					intv = decode_int64(streamd, args.shift);
-					sz = sizeof(integer);
-					if (sz > size)
+				else if (val & 3 == 1)//-
+					intv = decode_int(val);
+				else {//ext
+					if (sz != sizeof(integer))
 						return -1;
+					intv = decode_int64(streamd, args.shift);
 				}
-				else//-
-					intv = decode_int(val)
 				args.val = &intv;
 				break;
 			case ZT_BOOL:
-				args.val = val;
+				args.val = decode_uint(val);
 				break;
 			default:
-				sz = decode_uint(val);
-				if (sz > size)
-					return -1;
 				args.val = streamd;
 				args.len = sz;
 				break;
