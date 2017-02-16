@@ -30,8 +30,3 @@ type{
 1 = p1 {
     response = type.field
 }
-
-
-
-
-

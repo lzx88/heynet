@@ -14,11 +14,11 @@ struct zproto;
 typedef struct type zproto_type;
 typedef struct field zproto_field;
 struct zproto_arg {
-	const zproto_field *pf;
-	void *value;
-	int length;
 	void *ud;
-	int index;
+	const zproto_field *pf;
+	void *val;
+	int len;
+	int idx;
 	bool shift;
 };
 
