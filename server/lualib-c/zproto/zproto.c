@@ -146,9 +146,9 @@ zproto_dump(struct zproto *thiz) {
 		printf("\n");
 	}
 }
-static struct type *
-zproto_import(struct zproto *thiz, int idx) {
-	return 0 <= idx && idx < thiz->tn ? thiz->t[idx] : NULL;
+const struct type *
+zproto_import(const struct zproto *Z, int idx) {
+	return 0 <= idx && idx < Z->tn ? Z->t[idx] : NULL;
 }
 static struct protocol *
 zproto_query(struct zproto *thiz, int tag) {
@@ -170,24 +170,18 @@ zproto_query(struct zproto *thiz, int tag) {
 }
 
 static struct field *
-findtag(const struct type *ty, int tag) {
-	int mid, begin = 0, end = ty->n;
-	struct field *f;
-	while (begin < end) {
-		mid = (begin + end) / 2;
-		f = ty->f[mid];
+findtag(const struct type *ty, int tag, int *begin) {
+	const struct field *f;
+	int end = ty->n;
+	for (; *begin < end; ++(*begin)) {
+		f = ty->f[*begin];
 		if (f.tag == tag)
 			return f;
-		if (f.tag < tag)
-			begin = mid + 1;
-		else
-			end = mid;
 	}
 	return NULL;//nohere
 }
 
 //encode/decode
-
 typedef int64 integer;
 static char
 test_endian(){
@@ -419,14 +413,15 @@ static int64 decode_int64(const char* p, bool shift){ return shift ? shift64(p) 
 
 static int
 decode_key(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size){
-	args->idx = -1;
-	args->val = *stream;
+	args->idx = -args->idx;
 	args->len = 1 + strlen(*stream);
+	args->val = *stream;
 	if (*size < args->len)
 		return -1;
 	cb(args);
-	*size -= args->len;
+	args->idx = -args->idx;
 	*stream += args->len;
+	*size -= args->len;
 	return args->len;
 }
 static int
@@ -435,7 +430,6 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 	int sz = size;
 	int n;
 	integer intv;
-	args->idx = 1;
 	switch (f->type) {
 	case ZT_INTEGER:
 		if (--sz < 0)
@@ -443,53 +437,57 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 		n = *stream++;
 		if (n != 8 && n != 4)
 			return -2;
-		for (; sz > 0; sz -= n, ++args->idx) {
+		for (; sz > 0; sz -= n, stream += n) {
+			++args->idx;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			intv = n == 4 ? decode_int32(stream, args->shift) : decode_int64(stream, args->shift);
 			args->val = &intv;
 			cb(args);
-			stream += n;
 		}
 		break;
 	case ZT_BOOL:
-		for (; sz > 0; --sz, ++args->idx) {
+		for (; sz > 0; --sz, ++stream) {
+			++args->idx;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
+			if (sz < 1)
+				return -1;
 			args->val = *stream;
-			cb(args);
-			++stream;
+			cb(args);			
 		}
 		break;
 	default:
 		if (f->type != ZT_STRING && f->type < 0)
 			return -3;
-		for (; sz > 0; sz -= n, ++args->idx) {
+		for (; sz > 0; sz -= n, stream += n) {
+			++args->idx;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			if (sz < SIZE_HEADER)
 				return -1;
-			args->len = decode_int16(stream);
 			args->val = stream + SIZE_HEADER;
+			args->len = decode_int16(stream);
 			n = args->len + SIZE_HEADER;
-			if (size < n)
+			if (sz < n)
 				return -1;
-			cb(args);
-			*stream += n;
+			cb(args);	
 		}
 	}	
 	return size - sz;
 }
 int
-zproto_decode(const struct type *ty, const void *data, size_t size, char endian, zproto_cb cb, void *ud) {
+zproto_decode(const struct type *ty, const void *data, size_t size, bool shift, zproto_cb cb, void *ud) {
 	const char *streamf, *streamd;
 	struct zproto_arg args;
 	uint16 fn;
 	uint32 val;
-	int i, tag, sz;
+	int i, tag, sz, begin;
 	struct field *f;
+	if (ty == NULL)
+		return -2;
 	args.ud = ud;
-	args.shift = G_Endian != endian;
+	args.shift = shift;
 	if (size < SIZE_HEADER)
 		return -1;
 	size -= SIZE_HEADER;
@@ -501,8 +499,8 @@ zproto_decode(const struct type *ty, const void *data, size_t size, char endian,
 	streamf = data + SIZE_HEADER;
 	streamd = streamf + sz;
 	tag = 0;
+	begin = 0;
 	for (i = 0; i < fn ; ++i) {
-		args.idx = 0;
 		val = decode_int32(streamf + i * SIZE_FIELD, args.shift);
 		if (val & 7 == 7) {//tag
 			tag += decode_tag(val);
@@ -511,14 +509,14 @@ zproto_decode(const struct type *ty, const void *data, size_t size, char endian,
 		sz = (val & 7 == 3) ? decode_len(val) : 0;//len
 		if (size < sz)
 			return -1;
-		f = findtag(ty, ++tag);
+		f = findtag(ty, ++tag, &begin);
 		if (f == NULL) {//ignore
 			streamd += sz;
 			size -= sz;
 			continue;
 		}
 		args.pf = f;
-		if (f->key != ZK_NULL) {//array
+		args.idx = 0;
 			if (sz > 0 && sz != decode_array(cb, &args, streamd, sz))
 				return -1;
 		}

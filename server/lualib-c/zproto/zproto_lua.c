@@ -325,16 +325,17 @@ encode(const struct zproto_encode_arg *args) {
 		lua_pop(L, 1);
 		return sz;
 	default:
-		if (f.type < 0)
-			return luaL_error(L, "Invalid field type %s.%s", self->st->name, f.name);
 		if (!lua_istable(L, -1))
 			return luaL_error(L, ".%s[%d] is not a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		struct encode_ud sub;
 		sub.L = L;
-		sub.st = zproto_import(ZP, f.type);
 		sub.tbl_index = lua_gettop(L);
 		sub.deep = self->deep + 1;
 		sub.iter = 0;
+		sub.st = zproto_import(ZP, f.type);
+		if (sub.st == NULL)
+			return luaL_error(L, "Invalid field type %s.%s", self->st->name, f.name);
+
 
 		lua_pushnil(L);	// prepare an iterator slot
 		int sz = zproto_encode(sub.st, args->value, args->length, encode, &sub);
@@ -386,12 +387,9 @@ lencode(lua_State *L) {
 
 struct decode_ud {
 	lua_State *L;
-	const char *array_tag;
 	int array_index;
 	int result_index;
 	int deep;
-	int mainindex_tag;
-	int key_index;
 };
 
 static int
@@ -401,8 +399,7 @@ decode(const struct zproto_arg *args) {
 	lua_State *L = self->L;
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep!");
-	if (f->key != ZK_NULL) {
-
+	if (args->idx == 1 || arg->idx == -1) {
 	}
 	if (args->idx > 0) {
 		// It's array
@@ -423,11 +420,9 @@ decode(const struct zproto_arg *args) {
 			}
 		}
 	}
-	switch (args->type) {
-	case ZT_INTEGER:
-		// notice: in lua 5.2, 52bit integer support (not 64)
-		lua_Integer v = *(integer*)args->val;
-		lua_pushinteger(L, v);
+	switch (f->type) {
+	case ZT_INTEGER:// notice: in lua 5.2, 52bit integer support (not 64)
+		lua_pushinteger(L, *(integer*)args->val);
 		break;
 	case ZT_BOOL:
 		lua_pushboolean(L, (int*)args->val);
@@ -436,65 +431,22 @@ decode(const struct zproto_arg *args) {
 		lua_pushlstring(L, args->val, args->len);
 		break;
 	default:
-		if (args->type < 0)
+		if (f->type < 0)
 			return luaL_error(L, "Invalid type");
-
 		struct decode_ud sub;
 		int r;
 		lua_newtable(L);
 		sub.L = L;
 		sub.result_index = lua_gettop(L);
 		sub.deep = self->deep + 1;
+		r = zproto_decode(zproto_import(ZP, f->type), args->val, args->len, , decode, &sub);
+
 		break;
 	}
-			sub.array_index = 0;
-			sub.array_tag = NULL;
-			if (args->mainindex >= 0) {
-				// This struct will set into a map, so mark the main index tag.
-				sub.mainindex_tag = args->mainindex;
-				lua_pushnil(L);
-				sub.key_index = lua_gettop(L);
-
-				r = zproto_decode(args->subtype, args->val, args->len, decode, &sub);
-				if (r < 0)
-					return SPROTO_CB_ERROR;
-				if (r != args->len)
-					return r;
-				lua_pushvalue(L, sub.key_index);
-				if (lua_isnil(L, -1)) {
-					luaL_error(L, "Can't find main index (tag=%d) in [%s]", args->mainindex, args->tagname);
-				}
-				lua_pushvalue(L, sub.result_index);
-				lua_settable(L, self->array_index);
-				lua_settop(L, sub.result_index - 1);
-				return 0;
-			}
-			else {
-				sub.mainindex_tag = -1;
-				sub.key_index = 0;
-				r = sproto_decode(args->subtype, args->val, args->len, decode, &sub);
-				if (r < 0)
-					return SPROTO_CB_ERROR;
-				if (r != args->len)
-					return r;
-				lua_settop(L, sub.result_index);
-				break;
-	}
-	default:
-	}
-	if (args->index > 0) {
-		lua_seti(L, self->array_index, args->index);
-	}
-	else {
-		if (self->mainindex_tag == args->tagid) {
-			// This tag is marked, save the value to key_index
-			// assert(self->key_index > 0);
-			lua_pushvalue(L, -1);
-			lua_replace(L, self->key_index);
-		}
+	if (args->idx == 0)
 		lua_setfield(L, self->result_index, args->tagname);
-	}
-
+	else if(args->idx > 0)
+		lua_seti(L, self->array_index, args->index);
 	return 0;
 }
 static const void *
