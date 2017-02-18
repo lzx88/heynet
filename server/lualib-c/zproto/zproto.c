@@ -152,19 +152,16 @@ zproto_import(const struct zproto *Z, int idx) {
 }
 static struct protocol *
 zproto_query(struct zproto *thiz, int tag) {
-	int begin = 0, end = thiz->pn;
+	int t, mid, begin = 0, end = thiz->pn;
 	while (begin < end) {
-		int mid = (begin + end) / 2;
-		int t = thiz->p[mid].tag;
-		if (t == tag) {
+		mid = (begin + end) >> 1;
+		t = thiz->p[mid].tag;
+		if (t == tag)
 			return &thiz->p[mid];
-		}
-		if (tag > t) {
+		if (tag > t)
 			begin = mid + 1;
-		}
-		else {
+		else
 			end = mid;
-		}
 	}
 	return NULL;
 }
@@ -209,10 +206,6 @@ struct message{
 	zstruct content;
 };
 
-void write_buf(char* buf, char* data, size_t len){
-	memcpy(buf, data, len);
-}
-
 #define SIZE_HEADER	2
 #define SIZE_FIELD	4
 #define NULL_CODE 1
@@ -239,18 +232,32 @@ encode_int(int n) {
 #define decode_tag(v) (v) >> 3
 #define decode_len(v) (v) >> 3
 
-int
+static int
+encode_key(zproto_cb cb, struct zproto_arg *args, char **buffer, int *size) {
+	int n;
+	args->value = *buffer;
+	args->length = *size;
+	args->index = -args->index;
+	n = cb(args);
+	args->index = -args->index;
+	if (n < 0)
+		return n;
+	*buffer += n;
+	*size += n;
+	return n;
+}
+static int
 encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) {
+	const struct field &f = *args->pf;
+	char &intlen = *buffer;
+	int sz;
 	if (size < 1)
-		return ZPROTO_CB_ERROR;
-	char* header = buffer;
-	char intlen = sizeof(uint32);
-	int sz = 0;
-	int use = 1;
-	buffer += 1;
-	size -= 1;
+		return ZPROTO_CB_MEM;
+	intlen = sizeof(uint32);
+	++buffer;
+	--size;
 	integer i;
-	args.val = &i;
+	args.value = &i;
 	for (;;) {
 		sz = cb(&args);
 		if (sz == ZPROTO_CB_NIL)
@@ -260,107 +267,129 @@ encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) 
 		if (intlen == sizeof(uint32)) {
 			if (sz == sizeof(uint32)) {
 				if (intlen > size)
-					return ZPROTO_CB_ERROR;
-				*(uint32*)(buffer + args->idx * sizeof(uint32)) = i;
+					return ZPROTO_CB_MEM;
+				*(uint32*)(buffer + args->index * sizeof(uint32)) = i;
 			}
 			else {
-				if ((args->idx * sizeof(uint32)) > size)
-					return ZPROTO_CB_ERROR;
-				use += args->idx * sizeof(uint32);
-				for (int idx = args->idx; idx >= 0; --idx)
+				if ((args->index * sizeof(uint32)) > size)
+					return ZPROTO_CB_MEM;
+				for (int idx = args->index; idx >= 0; --idx)
 					*(uint64*)(buffer + idx * sizeof(uint64)) = *(uint32*)(buffer + idx * sizeof(uint32));
 				intlen = sizeof(uint64);
 			}
 		}
 		if (intlen == sizeof(uint64)) {
-			sz = intlen;
 			if (intlen > size)
-				return ZPROTO_CB_ERROR;
-			*(uint64*)(buffer + args->idx * sizeof(uint64)) = i;
+				return ZPROTO_CB_MEM;
+			*(uint64*)(buffer + args->index * sizeof(uint64)) = i;
 		}
 		size -= intlen;
-		use += intlen;
-		++args->idx;
+		++args->index;
 	}
-	if (args->idx == 0)
+	if (args->index == 0)
 		return 0;
-	*header = intlen;
-	return use;
+	return args->index * intlen + 1;
+}
+static int
+encode_int_map(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) {
+	const struct field &f = *args->pf;
+	char* head = buffer;
+	char intlen = sizeof(uint64);
+	int sz;
+	integer i;
+	for (;;) {
+		if(0 > encode_key(cb, args, &buffer, &size))
+			return ZPROTO_CB_MEM;
+		args.value = &i;
+		sz = cb(&args);
+		if (sz == ZPROTO_CB_NIL)
+			break;
+		if (sz < 0)
+			return sz;
+		if (intlen > size)
+			return ZPROTO_CB_MEM;
+		*(uint64*)buffer = i;
+		buffer += intlen;
+		size -= intlen;
+		++args->index;
+	}
+	if (args->index == 0)
+		return 0;
+	return buffer - head;
 }
 static int
 encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	const struct field &f = *args->pf;
 	const char* head = buffer;
 	int sz;
+	args->index = 0;
 	switch (f.type) {
 	case ZT_INTEGER:
-		return encode_int_array(cb, args, buffer, size);
+		return f->key == ZK_MAP ? encode_int_map(cb, args, buffer, size) : encode_int_array(cb, args, buffer, size);
 		break;
 	case ZT_BOOL:
 		integer i;
-		args->val = &i;
 		for (;;) {
+			if (f->key == ZK_MAP && 0 > encode_key(cb, args, &buffer, &size))
+				return ZPROTO_CB_MEM;
+			args->value = &i;
 			sz = cb(args);
 			if (sz == ZPROTO_CB_NIL)
 				break;
 			if (sz < 0)
-				return ZPROTO_CB_ERROR;
+				return ZPROTO_CB_MEM;
 			*buffer = i;
 			--size;
 			++buffer;
-			++args->idx;
+			++args->index;
 		}
 		break;
 	default:
 		for (;;) {
+			if (f->key == ZK_MAP && 0 > encode_key(cb, args, &buffer, &size))
+				return ZPROTO_CB_MEM;
 			if (size < SIZE_HEADER)
-				return ZPROTO_CB_ERROR;
-			size -= SIZE_HEADER;
-			args->val = buffer + SIZE_HEADER;
-			args->len = size;
+				return ZPROTO_CB_MEM;
+			args->value = buffer + SIZE_HEADER;
+			args->length = size - SIZE_HEADER;
 			sz = cb(args);
 			if (sz == ZPROTO_CB_NIL)
 				break;
-			if (sz < 0) {
-				return ZPROTO_CB_ERROR;
+			if (sz < 0)
+				return ZPROTO_CB_MEM;
 				*(uint16*)buffer = sz;
-				buffer += SIZE_HEADER + sz;
-				size -= sz;
-				++args->idx;
-			}
-			break;
+			buffer += SIZE_HEADER + sz;
+			size -= SIZE_HEADER + sz;
+			++args->index;
 		}
+		break;
 	}
 	return buffer - head;
 }
 int
 zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud) {
-	int i;
-	int headlen = SIZE_HEADER + ty->maxn * SIZE_FEILD;
-	if (headlen < size)
-		return -1;
-	size -= headlen;
-	uint32 *fdata = buffer + SIZE_HEADER;
-	char *data = buffer + headlen;
-	*(uint16*)buffer = ty->maxn;
-
-	int fidx = 0, lasttag = 0, sz = 0;
 	struct zproto_arg args;
+	uint32 *fdata = buffer + SIZE_HEADER;
+	int fidx = 0, lasttag = 0, sz = 0;
+	int i = SIZE_HEADER + ty->maxn * SIZE_FIELD;
+	char *data = buffer + i;
+	if (size < i)
+		return -1;
+	size -= i;
+	*(uint16*)buffer = ty->maxn;
 	args.ud = ud;
 	for (i = 0; i < ty->n; ++i) {
+		args.index = -1;
 		args.pf = &ty->f[i];
 		const struct field &f = ty->f[i];
-
 		if (f.tag != (lasttag + 1))
-			fdata[fidx++] = encode_tag(f.tag - lasttag - 1);
-	
+			fdata[fidx++] = encode_tag(f.tag - lasttag - 1);	
 		if (f.key == ZK_NULL) {
-			args.idx = -1;
 			switch (f.type) {
 			case ZT_INTEGER:
 			case ZT_BOOL:
 				integer i;
-				args.val = &i;
+				args.value = &i;
 				sz = cb(&args);
 				if (sz == 0) {
 					fdata[fidx] = encode_int(i);
@@ -374,8 +403,8 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 				}
 				break;
 			default:
-				args.val = data;
-				args.len = size;
+				args.value = data;
+				args.length = size;
 				sz = cb(&args);
 				if (sz >= 0)
 					fdata[fidx] = encode_len(sz);
@@ -383,24 +412,21 @@ zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void 
 			}
 		}
 		else if (f.key == ZK_ARRAY || f.key == ZK_MAP){
-			args.idx = 0;
-			sz = encode_array(cb, args, data, size);
+			sz = encode_array(cb, &args, data, size);
 			if (sz >= 0)
 				fdata[fidx] = encode_len(sz);
 		}
 		else
-			assert(false);
-
+			return -2;
 		if (sz < 0)
 			return -1;
-		if (sz > 0){
-			data += sz;
-			size -= sz;
-		}
+		data += sz;
+		size -= sz;
 		++fidx;
-		lasttag = f->tag;
+		lasttag = f.tag;
 	}
-	assert(fidx == ty->maxn);
+	if (fidx != ty->maxn)
+		return -2;
 	return data - buffer;
 }
 
@@ -413,16 +439,16 @@ static int64 decode_int64(const char* p, bool shift){ return shift ? shift64(p) 
 
 static int
 decode_key(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size){
-	args->idx = -args->idx;
-	args->len = 1 + strlen(*stream);
-	args->val = *stream;
-	if (*size < args->len)
+	args->index = -args->index;
+	args->length = 1 + strlen(*stream);
+	args->value = *stream;
+	if (*size < args->length)
 		return -1;
 	cb(args);
-	args->idx = -args->idx;
-	*stream += args->len;
-	*size -= args->len;
-	return args->len;
+	args->index = -args->index;
+	*stream += args->length;
+	*size -= args->length;
+	return args->length;
 }
 static int
 decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size) {
@@ -434,26 +460,26 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 	case ZT_INTEGER:
 		if (--sz < 0)
 			return -1;
-		n = *stream++;
+		n = f->key == ZK_MAP ? 8 : (*stream++);
 		if (n != 8 && n != 4)
 			return -2;
 		for (; sz > 0; sz -= n, stream += n) {
-			++args->idx;
+			++args->index;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			intv = n == 4 ? decode_int32(stream, args->shift) : decode_int64(stream, args->shift);
-			args->val = &intv;
+			args->value = &intv;
 			cb(args);
 		}
 		break;
 	case ZT_BOOL:
 		for (; sz > 0; --sz, ++stream) {
-			++args->idx;
+			++args->index;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			if (sz < 1)
 				return -1;
-			args->val = *stream;
+			args->value = *stream;
 			cb(args);			
 		}
 		break;
@@ -461,14 +487,14 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 		if (f->type != ZT_STRING && f->type < 0)
 			return -3;
 		for (; sz > 0; sz -= n, stream += n) {
-			++args->idx;
+			++args->index;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return -1;
 			if (sz < SIZE_HEADER)
 				return -1;
-			args->val = stream + SIZE_HEADER;
-			args->len = decode_int16(stream);
-			n = args->len + SIZE_HEADER;
+			args->value = stream + SIZE_HEADER;
+			args->length = decode_int16(stream);
+			n = args->length + SIZE_HEADER;
 			if (sz < n)
 				return -1;
 			cb(args);	
@@ -516,11 +542,8 @@ zproto_decode(const struct type *ty, const void *data, size_t size, bool shift, 
 			continue;
 		}
 		args.pf = f;
-		args.idx = 0;
-			if (sz > 0 && sz != decode_array(cb, &args, streamd, sz))
-				return -1;
-		}
-		else {
+		args.index = 0;
+		if (f->key == ZK_NULL) {
 			switch (f->type) {
 			case ZT_INTEGER:
 				integer intv;
@@ -533,17 +556,21 @@ zproto_decode(const struct type *ty, const void *data, size_t size, bool shift, 
 						return -1;
 					intv = decode_int64(streamd, args.shift);
 				}
-				args.val = &intv;
+				args.value = &intv;
 				break;
 			case ZT_BOOL:
-				args.val = decode_uint(val);
+				args.value = decode_uint(val);
 				break;
 			default:
-				args.val = streamd;
-				args.len = sz;
+				args.value = streamd;
+				args.length = sz;
 				break;
 			}
 			cb(&args);
+		}
+		else {
+			if (sz > 0 && sz != decode_array(cb, &args, streamd, sz))
+				return -1;
 		}
 		streamd += sz;
 		size -= sz;

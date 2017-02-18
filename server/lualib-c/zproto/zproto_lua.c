@@ -233,34 +233,34 @@ adjust_buffer(lua_State *L, int oldsize, int newsize) {
 
 struct encode_ud {
 	lua_State *L;
-	struct zproto_type *zt;
-	int tbl_index;
+	int table_index;
 	int deep;
 };
 
 static int
-encode(const struct zproto_encode_arg *args) {
+encode(const struct zproto_arg *args) {
 	struct encode_ud *self = args->ud;
 	const struct field &f = *args->pf;
 	lua_State *L = self->L;
-
+	int sz = 0;
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
-	if (f.key != ZK_NULL) {
-		if (args->index == 0){
-			lua_getfield(L, self->tbl_index, f.name);
+	if (f.key == ZK_NULL) 
+		lua_getfield(L, self->table_index, f.name);
+	else {
+		if ((f.key == ZK_ARRAY && args->index == 1) ||
+			(f.key == ZK_MAP && args->index == -1)) {
+			lua_getfield(L, self->table_index, f.name);
 			if (lua_isnil(L, -1)) {
 				lua_pop(L, 1);
 				return ZPROTO_CB_NIL;
 			}
-			if (!lua_istable(L, -1)) {
-				lua_pop(L, 1);
+			if (!lua_istable(L, -1))
 				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
-			}
 		}
 		if (f.key == ZK_ARRAY)
-			lua_geti(L, -1, args->index + 1);
-		else if (f.key == ZK_MAP) {
+			lua_geti(L, -1, args->index);
+		else if (f.key == ZK_MAP && args->index < 0) {
 			lua_pushnil(L);
 			if (!lua_next(L, -2)) {
 				// iterate end
@@ -269,43 +269,39 @@ encode(const struct zproto_encode_arg *args) {
 			}
 			if (lua_isinteger(L, -2)) {
 				char tmp[8] = { 0 };
-				sz = sprintf(tmp, "%d", lua_tointeger(L, -2));
+				sz = 1 + sprintf(tmp, "%d", lua_tointeger(L, -2));
 				if (sz > args->length)
-					return ZPROTO_CB_ERROR;
-				memcpy(args->value, tmp, sz);
+					return ZPROTO_CB_MEM;
+				strcpy(args->value, tmp);
 			}
-			else(lua_isstring()) {
-				size_t sz = 0;
+			else(lua_isstring(L, -2)) {
 				const char *str = lua_tolstring(L, -2, &sz);
+				++sz;
 				if (sz > args->length)
-					return ZPROTO_CB_ERROR;
-				memcpy(args->value, str, sz);
+					return ZPROTO_CB_MEM;
+				strcpy(args->value, str);
 			}
 			else
 				return luaL_error(L, ".*%s(%d) should be a map key type (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 			lua_remove(L, -2);
+			return sz;
 		}
-		else
-			assert(false);
 		if (lua_isnil(L, -1)) {
 			lua_pop(L, 2);
 			return ZPROTO_CB_NIL;
 		}
 	}
-	else
-		lua_getfield(L, self->tbl_index, f.name);
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
 		return ZPROTO_CB_NIL;
 	}
 	switch (f.type) {
-	case ZT_INTEGER:
+	case ZT_INTEGER:// notice: in lua 5.2, lua_Integer maybe 52bit
 		int isnum;
 		lua_Integer v = lua_tointegerx(L, -1, &isnum);
 		if (!isnum)
 			return luaL_error(L, ".%s[%d] is not a number (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		lua_pop(L, 1);
-		// notice: in lua 5.2, lua_Integer maybe 52bit
 		*(integer *)args->value = v;
 		return (v & ~0x7FffFFff) > 0 ? 8 : 4;
 	case ZT_BOOL:
@@ -317,10 +313,9 @@ encode(const struct zproto_encode_arg *args) {
 	case ZT_STRING:
 		if (!lua_isstring(L, -1))
 			return luaL_error(L, ".%s[%d] is not a string (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
-		size_t sz = 0;
 		const char *str = lua_tolstring(L, -1, &sz);
 		if (sz > args->length)
-			return ZPROTO_CB_ERROR;
+			return ZPROTO_CB_MEM;
 		memcpy(args->value, str, sz);
 		lua_pop(L, 1);
 		return sz;
@@ -329,49 +324,44 @@ encode(const struct zproto_encode_arg *args) {
 			return luaL_error(L, ".%s[%d] is not a table (Is a %s)", f.name, f.tag, lua_typename(L, lua_type(L, -1)));
 		struct encode_ud sub;
 		sub.L = L;
-		sub.tbl_index = lua_gettop(L);
+		sub.table_index = lua_gettop(L);
 		sub.deep = self->deep + 1;
 		sub.iter = 0;
 		sub.st = zproto_import(ZP, f.type);
 		if (sub.st == NULL)
 			return luaL_error(L, "Invalid field type %s.%s", self->st->name, f.name);
-
-
 		lua_pushnil(L);	// prepare an iterator slot
 		int sz = zproto_encode(sub.st, args->value, args->length, encode, &sub);
-		lua_settop(L, sub.tbl_index - 1);	// pop the value
+		lua_settop(L, sub.table_index - 1);	// pop the value
 		return sz;
 	}
 }
 
 static int
 lencode(lua_State *L) {
+	struct encode_ud self;
+	int rev;
 	void *buffer = lua_touserdata(L, lua_upvalueindex(1));
 	int sz = lua_tointeger(L, lua_upvalueindex(2));
-	int tbl_index = 3;
 	int tag = lua_tointeger(L, 1);
 	const struct zproto_type *ty = lua_touserdata(L, 2);
 	if (ty == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
-	luaL_checktype(L, tbl_index, LUA_TTABLE);
+	self.L = L;
+	luaL_checktype(L, self.table_index, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);
 	
-	int rev = 0;
-	struct encode_ud self;
-	self.L = L;
-
 	for (;;){
-		self.zt = ty;
-		self.tbl_index = tbl_index;
+		self.table_index = 3;
 		self.deep = 0;
 		self.iter = 0;
 
-		lua_settop(L, tbl_index);
+		lua_settop(L, self.table_index);
 		lua_pushnil(L);	// for iterator (stack slot 4)
-		rev = sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
+		int rev = sz >> 3;//tips: 0pack最坏情况 每16个字节首部会扩充2个字节 encode 头部会预留 size / 8 空间 用于0pack
 		buffer += rev;
 		int use = zproto_encode(ty, buffer, sz - rev, encode, &self);
-		if (use < 0) {
+		if (use == -1) {
 			int newsz = sz << 1;
 			buffer = adjust_buffer(L, sz, newsz);
 			sz = newsz;
@@ -390,6 +380,7 @@ struct decode_ud {
 	int array_index;
 	int result_index;
 	int deep;
+	const char *key;
 };
 
 static int
@@ -399,54 +390,54 @@ decode(const struct zproto_arg *args) {
 	lua_State *L = self->L;
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep!");
-	if (args->idx == 1 || arg->idx == -1) {
+	if ((f->key == ZK_ARRAY && args->index == 1) ||
+		(f->key == ZK_MAP && args->index == -1)) {
+		lua_newtable(L);
+		lua_pushvalue(L, -1);
+		lua_setfield(L, self->result_index, f->name);
+		lua_replace(L, self->array_index);
 	}
-	if (args->idx > 0) {
-		// It's array
-		if (args->tagname != self->array_tag) {
-			self->array_tag = args->tagname;
-			lua_newtable(L);
-			lua_pushvalue(L, -1);
-			lua_setfield(L, self->result_index, args->tagname);
-			if (self->array_index) {
-				lua_replace(L, self->array_index);
-			}
-			else {
-				self->array_index = lua_gettop(L);
-			}
-			if (args->idx < 0) {
-				// It's a empty array, return now.
-				return 0;
-			}
-		}
+	if (f->key == ZK_MAP && args->index < 0){
+		self->key = args->value;
+		return 0;
 	}
 	switch (f->type) {
 	case ZT_INTEGER:// notice: in lua 5.2, 52bit integer support (not 64)
-		lua_pushinteger(L, *(integer*)args->val);
+		lua_pushinteger(L, *(integer*)args->value);
 		break;
 	case ZT_BOOL:
-		lua_pushboolean(L, (int*)args->val);
+		lua_pushboolean(L, (int*)args->value);
 		break;
 	case ZT_STRING:
-		lua_pushlstring(L, args->val, args->len);
+		lua_pushlstring(L, args->value, args->length);
 		break;
 	default:
 		if (f->type < 0)
 			return luaL_error(L, "Invalid type");
 		struct decode_ud sub;
-		int r;
 		lua_newtable(L);
 		sub.L = L;
-		sub.result_index = lua_gettop(L);
 		sub.deep = self->deep + 1;
-		r = zproto_decode(zproto_import(ZP, f->type), args->val, args->len, , decode, &sub);
-
+		sub.result_index = lua_gettop(L);
+		sub.key = NULL;
+		sub.array_index = self.result_index + 1;
+		lua_pushnil(L);
+		int sz = zproto_decode(zproto_import(ZP, f->type), args->value, args->length, args->shift, decode, &sub);
+		if (sz < 0)
+			return luaL_error(L, "Decode error!");
+		if (sz != args->length)
+			return sz;
+		lua_settop(L, sub.result_index);
 		break;
 	}
-	if (args->idx == 0)
+	if (args->index == 0)
 		lua_setfield(L, self->result_index, args->tagname);
-	else if(args->idx > 0)
-		lua_seti(L, self->array_index, args->index);
+	else if (args->index > 0)	{
+		if (ZK_ARRAY == f->key)
+			lua_seti(L, self->array_index, args->index);
+		else if (ZK_MAP == f->key)
+			lua_setfield(L, self->result_index, self->key);
+	}
 	return 0;
 }
 static const void *
@@ -475,8 +466,11 @@ ldecode(lua_State *L) {
 	self.L = L;
 	self.result_index = lua_gettop(L);
 	self.deep = 0;
-	if (0 > zproto_decode(ty, data, sz, decode, &self));
-		return luaL_error(L, "decode error");
+	self.key = NULL;
+	self.array_index = self.result_index + 1;
+	lua_pushnil(L);
+	if (zproto_decode(ty, data, sz, decode, &self) < 0);
+		return luaL_error(L, "Decode error!");
 	lua_settop(L, self.result_index);
 	return 1;
 }
