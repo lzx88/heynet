@@ -37,4 +37,10 @@ typedef uint64_t    uint64;
 
 #endif
 
+#ifndef bool
+#define bool char
+#define ture 1
+#define false 0
+#endif
+
 #endif

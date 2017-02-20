@@ -55,21 +55,27 @@ static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isnum) {
 
 #endif
 
-inline void zlua_getdata(lua_State* L, int idx, int *val) { *val = lua_tointeger(L, idx); }
-inline void zlua_getdata(lua_State* L, int idx, char **val){ *val = lua_tostring(L, idx); }
-inline void zlua_getfield(lua_State* L, int idx, int k) { lua_rawgeti(L, idx, k); }
-inline void zlua_getfield(lua_State* L, int idx, const char* k) { lua_rawgetp(L, idx, k); }
-#define if_getluatable(L, k) zlua_getfield(L, -1, k); for(int i = 0; i-- == 0 && lua_istable(L, -1) || (lua_pop(L, 1); false); lua_pop(L, 1))
-#define for_luatable(L)  for(lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1))
-#define zlua_getsize(L) lua_rawlen(L, -1)
-#define zlua_getfdata(L, k, val) zlua_getfield(L, -1, k); zlua_getdata(L, -1, val); lua_pop(L, 1)
+static int zgetfieldint(lua_State* L, const char *key) {
+	lua_rawgetp(L, -1, key);
+	int isnum;
+	lua_Integer result = lua_tointegerx(L, -1,& isnum);
+	if (isnum == 0)
+		luaL_error(L, "Field %s isn't number", key);
+	lua_pop(L, 1);
+	return result;
+}
 
-static char* __zgetfieldstring(lua_State* L, struct zproto *Z, const chat *key){
+static char* zgetfieldname(lua_State* L, struct zproto *zp, const char *key){
 	char buf[256] = { 0 };
-	zlua_getfdata(L, key, &buf);
-	char* tmp = pool_alloc(Z->mem, strlen(buf) + 1);
-	strcpy(tmp, buf);
-	return tmp;
+	lua_rawgetp(L, -1, key);
+	int len;
+	const char *name = lua_tolstring(L, -1, &len);
+	if (NULL == name)
+		luaL_error(L, "Field %s isn't string", key);
+	char* result = pool_alloc(zp->mem, len + 1);
+	strcpy(result, name);
+	lua_pop(L, 1);
+	return result;
 }
 
 /* global zproto pointer for multi states
@@ -82,33 +88,39 @@ lcreate(lua_State *L) {
 	int idx = lua_gettop(L);
 	assert(idx == 1);
 	struct zproto *Z = zproto_alloc();
-	if_getluatable(L, "P"){
-		Z->pn = zlua_getsize(L);
+	lua_rawgetp(L, -1, "P");
+	if (lua_istable(L, -1)) {
+		Z->pn = lua_rawlen(L, -1);
 		Z->p = pool_alloc(Z->mem, sizeof(*Z->p) * Z->pn);
 		int n = 0;
-		for_luatable(L){
+		for (lua_pushnil(L); 0 != lua_next(L, -2); lua_pop(L, 1)) {
 			assert(n < Z->pn);
 			protocol* tp = Z->p[n++];
-			zlua_getfield(L, "tag", &tp->tag);
-			zlua_getfield(L, "request", &tp->request);
+			zgetfieldint(L, "tag", &tp->tag);
+			zgetfieldint(L, "request", &tp->request);
 			tp->response = -1;
-			zlua_getfield(L, "response", &tp->response);
+			zgetfieldint(L, "response", &tp->response);
 		}
 	}
+	lua_pop(L, 1);
+	for (int _ = 0; _-- == 0 && (lua_istable(L, -1) ? lua_pop(L, 1) :\
+		false) : ); lua_pop(L, 1))
+	if_getluatable(L, "P"){
+		
+	}
 	if_getluatable(L, "T"){
-		Z->tn = zlua_getsize(L);
+		Z->tn = lua_rawlen(L, -1);
 		Z->t = pool_alloc(Z->mem, sizeof(*Z->t) * Z->tn);
 		for_luatable(L){
-			int tag;
-			zlua_getfdata(L, "tag", &tag);
+			int tag = zgetfieldint(L, "tag");
 			assert(tag <= z->tn);
 
 			struct type *ty = Z->t[tag];
-			ty->name = __zgetfieldstring(L, Z, "name");
+			ty->name = zgetfieldname(L, Z, "name");
 			ty->n = 0;
 			ty->f = NULL;
 			if_getluatable(L, "field"){
-				ty->n = zlua_getsize(L);
+				ty->n = lua_rawlen(L, -1);
 				ty->f = pool_alloc(Z->mem, sizeof(*ty->f) * ty->n);
 				int n = 0;
 				ty->maxn = ty->n;//最长feild 长度 ty->n + 参差数量
@@ -116,11 +128,10 @@ lcreate(lua_State *L) {
 				for_luatable(L){
 					assert(n < ty->fn);
 					struct field *tf = ty->f[n++];
-					tf->name = __zgetfieldstring(L, Z, "name");
-					tf->key = ZK_NULL;
-					zlua_getfdata(L, "tag", &tf->tag);
-					zlua_getfdata(L, "key", &tf->key);
-					zlua_getfdata(L, "type", &tf->type);
+					tf->name = zgetfieldname(L, Z, "name");
+					tf->tag = zgetfieldint(L, "tag");
+					tf->key = zgetfieldint(L, "key");
+					tf->type = zgetfieldint(L, "type");
 					if (tf->tag != (lasttag + 1))
 						++ty->maxn;
 					lasttag = tf->tag;

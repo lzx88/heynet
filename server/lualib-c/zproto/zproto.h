@@ -19,13 +19,13 @@ struct zproto_arg {
 	void *value;
 	int length;
 	int index;
-	bool shift;
+	char shift;
 };
 
 #define ZPROTO_CB_MEM		-1
 #define ZPROTO_CB_ERR		-2
 #define ZPROTO_CB_NIL		-3
 
-int zproto_encode(const zproto_type *ty, void *buffer, int size, zproto_cb cb, void *ud);
 typedef int(*zproto_cb)(const struct zproto_arg *args);
+int zproto_encode(const zproto_type *ty, void *buffer, int size, zproto_cb cb, void *ud);
 #endif

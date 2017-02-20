@@ -39,7 +39,7 @@ pool_alloc(struct memery *m, size_t sz) {
 		m->ptr = malloc(m->size);
 		return m->ptr;
 	}
-	void *result = NULL;
+	char *result = NULL;
 	if (sz > CHUNK_SIZE)
 		result = pool_enlarge(m, m->size + sz);
 	else if (sz + m->curr > m->size)
@@ -81,11 +81,11 @@ struct zproto{
 	struct type *t;
 };
 
-static struct zproto *
+struct zproto *
 zproto_alloc(){
 	struct memery m;
 	pool_init(&m);
-	zproto* thiz = pool_alloc(&m, sizeof(*thiz));
+	struct zproto* thiz = pool_alloc(&m, sizeof(*thiz));
 	memset(thiz, 0, sizeof(*thiz));
 	thiz->mem = m;
 	return thiz;
@@ -246,7 +246,7 @@ encode_key(zproto_cb cb, struct zproto_arg *args, char **buffer, int *size) {
 }
 static int
 encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) {
-	const struct field &f = *args->pf;
+	//const struct field &f = *args->pf;
 	char &intlen = *buffer;
 	int sz;
 	if (size < 1)
@@ -255,9 +255,9 @@ encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) 
 	++buffer;
 	--size;
 	integer i;
-	args.value = &i;
+	args->value = &i;
 	for (;;) {
-		sz = cb(&args);
+		sz = cb(args);
 		if (sz == ZPROTO_CB_NIL)
 			break;
 		if (sz < 0)

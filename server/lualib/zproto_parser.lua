@@ -191,6 +191,8 @@ local function link(all, result, filename)
         if p.response then
             assert(type(p.response) == "string")
             p.response = gentypetag(p.response, tmp)
+        else
+            p.response = -1
         end
         table.insert(result.P, p)
     end
