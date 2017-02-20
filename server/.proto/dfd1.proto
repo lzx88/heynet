@@ -19,24 +19,9 @@ type{
 } 
 --5.自定义类型可以内嵌自定义类型
 
-2 = p2{
-    type.field mn{} =2
-    bool mb{}       =3
-    string ms{}     =1
-    number vn[]     =5
-    bool vb[]       =6
-    string vs[]     =8
+1=p1{
     number n        =20
     bool b          =15
     string str      =14
-    #{}
-}
-0= p0 {
-    #type
-}
-3=p1{
-    number n        =20
-    bool b          =15
-    string str      =14
-    # type.field
+    # type.nest3
 }

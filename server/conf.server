@@ -9,7 +9,7 @@ agent_pool_init = 2
 config_path = root .. ".config/*.cfg"
 proto_path = root .. ".proto/*.proto"
 
-gate_port = server_idx .. 5678 
+gate_port = server_idx .. 5678
 debug_port = server_idx .. 8000
 
 sproto_slot_c2s = 1

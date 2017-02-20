@@ -105,9 +105,7 @@ zproto_done(struct zproto *thiz){
 		tt->name += offset;
 		tt->f += offset;
 		for (int j = 0; j < tt->n; ++j)
-		{
 			tt->f[j]->name += offset;
-		}
 	}
 	return thiz;
 }
