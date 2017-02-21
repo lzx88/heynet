@@ -29,7 +29,9 @@ type{
     number n        =20
     bool b          =15
     string str      =14
-    #{}
+    #{
+
+    }
 }
 0= p0 {
     #type
