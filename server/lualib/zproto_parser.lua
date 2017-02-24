@@ -9,7 +9,7 @@ local V = lpeg.V
 
 
 local exception = lpeg.Cmt(lpeg.Carg(1), function (_, pos, state)
-    error(string.format("Syntax error at protocol file %s:%d!", state.file or "", state.line))
+    error(string.format("Syntax error at protocol file:%s line:%d.", state.file or "", state.line))
     return pos
 end)
 local function count_lines(_, pos, state)
@@ -45,19 +45,18 @@ local protocol = P {
     STRUCT = namedpat("struct", name * custompat(multipat(V"FIELD" + V"STRUCT"))),
     PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(name) * V"PROTO"),
     PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
-    RESPONSE = namedpat("response", P"response" * (custompat(multipat(V"FIELD")) + blankpat"=" * typename)),
+    RESPONSE = namedpat("response", P"#" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
     FIELD = namedpat("field", typename * blanks * name * (C"[]" + C"{}")^-1 * blankpat"=" * tag),
 }
 local protofile = dummy * protocol * dummy * eof
 
-local buildin = { number = -1, string = -2, bool = -3, response = "response"}
+local buildin = { number = -1, string = -2, bool = -3 }
 local function checkname(str)
-    assert(not buildin[str], "Buildin type: ".. str .." cann't be use for name!")
+    assert(not buildin[str], "Buildin type: ".. str .." cann't be use for name.")
     return str
 end
 local function checktype(all, ptype, t)
     if buildin[t] then
-       assert(t ~= "response", "Buildin type: response cann't be use for typename!")
        return t
     end
     local fullname = ptype .. "." .. t
@@ -74,7 +73,7 @@ end
 local convert = {}
 function convert.field(all, repeats, p, typename)
     local f = { type = p[1], name = p[2], tag = p[3], key = 0}
-   if p[4] then
+    if p[4] then
         f.tag = p[4]
         if p[3] == "[]" then
             f.key = 1
@@ -83,19 +82,17 @@ function convert.field(all, repeats, p, typename)
         end
     end
     f.name = checkname(f.name)
-    assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name)
-    assert(not repeats[f.name], "Redefined name in type:".. typename ..".".. f.name)
+    assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name ..".")
+    assert(not repeats[f.name], "Redefined name in type:".. typename ..".".. f.name ..".")
     repeats[f.tag] = true
     repeats[f.name] = true
     f.type = checktype(all, typename, f.type)
-    assert(f.type, "Undefined type["..p[1].."] in field[".. typename ..".".. f.name.."].")
+    assert(f.type, "Undefined type:"..p[1].." in field:".. typename ..".".. f.name..".")
     return f
 end
 function convert.struct(all, obj)
-    local result = { name = checkname(obj[1]), field = {}}
+    local result = { name = checkname(obj[1]), field = {} }
     local tags = {}
-    local names = {}
-
     if obj[2] then
         for _, f in ipairs(obj[2]) do
             if f.type == "field" then
@@ -105,7 +102,7 @@ function convert.struct(all, obj)
                 assert(f.type == "struct")    -- nest type
                 local nesttypename = result.name .. "." .. checkname(f[1])
                 f[1] = nesttypename
-                assert(all.struct[nesttypename] == nil, "Redefined type:" .. nesttypename)
+                assert(all.struct[nesttypename] == nil, "Redefined type:" .. nesttypename..".")
                 all.struct[nesttypename] = convert.struct(all, f)
             end
         end
@@ -124,7 +121,6 @@ function convert.protocol(all, obj)
         end
     end
     all.struct[result.name] = convert.struct(all, {result.name, field}) 
-
             
     if result.response then
         if "table" == type(result.response[1]) then
@@ -133,7 +129,9 @@ function convert.protocol(all, obj)
             result.response = rsp.name
         else
             result.response = result.response[1]
-            assert(all.struct[result.response], "Undefined type "..result.response.." in protocol ".. result.name)
+            if result.response then
+                assert(all.struct[result.response], "Undefined type:"..result.response.." in protocol:".. result.name..".")
+            end
         end
     end
     return result
@@ -143,12 +141,12 @@ local function adjust(r)
     local t = {}
     for _, obj in ipairs(r) do
         local result = convert[obj.type](all, obj)
-        assert(not t[result.name], "Redefined typename ".. result.name)
+        assert(not t[result.name], "Redefined typename:".. result.name..".")
         t[result.name] = true
         all[obj.type][result.name] = result
 
         if obj.type == "protocol" then
-            assert(not t[result.tag], "Redefined protocol no. ".. result.tag)
+            assert(not t[result.tag], "Redefined protocol no.".. result.tag.."!")
             t[result.tag] = true
 
             result.request = result.name
@@ -170,7 +168,7 @@ local function link(all, result, filename)
                 all.struct[t].tag = taginc
                 T[taginc] = all.struct[t]
                 taginc = taginc + 1
-           end
+            end
             return all.struct[t].tag
         end
     end
@@ -193,9 +191,20 @@ local function link(all, result, filename)
         if p.response then
             assert(type(p.response) == "string")
             p.response = gentypetag(p.response, tmp)
+        else
+            p.response = -1
         end
         table.insert(result.P, p)
     end
+    table.sort(result.P, function(a, b)
+        return a.tag < b.tag
+    end)
+    local tt = -1
+    for _,p in pairs(result.P) do
+        assert(p.tag > tt, "Redefined protocol no.".. p.tag.."!")
+        tt = p.tag
+    end
+
     for _,t in pairs(tmp) do
         for _, f in pairs(t.field) do
             linkfield(f, result.T)
@@ -207,6 +216,9 @@ local function link(all, result, filename)
         for _, f in pairs(t.field) do
             table.insert(fs, f)
         end
+        table.sort(fs, function(a, b)
+            return a.tag < b.tag
+        end)
         t.field = fs
     end
     all = nil
@@ -215,37 +227,50 @@ end
 
 --[[
 The protocol of zproto
-1.字段tag从1开始
-2.字段类型后边加[] 表示数组 而 加[name] 表示以name为key的map
-3.协议中不允许定义自定义类型，如果有 response 字段 表示返回包
-4.内建类型为 数字 number, 字符串 string, 布尔值 bool, 一个关键字 response 不允许作为 字段name
-5.自定义类型可以内嵌自定义类型
-6.只支持行注释
+-- The protocol of zproto
+--1.字段tag从1开始，协议号 可以从0开始
+--2.字段名加[] 表示数组 而 加{} 表示map
+--3.协议中， 不允许内嵌自定义类型，如果有 #的字段则表示返回包
+--4.内建关键字为 number, string, bool 不允许作为 字段name
+--5.自定义类型可以内嵌自定义类型
+--6.支持--单行注释
 ]]
 
 --[[uage
+
 type{
-    field {
-        string name     =1
-        integer buildin =2
-        integer type[]  =3
-        integer tag     =4
-        boolean integer =5
-    }
-    string name         =1
-    field fields[name]  =2
-}
+  field {
+    string name     = 1--4.内建关键字为 number, string, bool 不允许作为 字段name
 
-0=protocol{
-    string name         =1--fdfsdf
-    integer buildin     = 2--fdfsdf
-    response {
-      integer index     = 1
-    }
-}
+    bool type[]   = 3
+  }
+  nest3 {
+    field type[]      = 3
+  }  
+  field fields{}  =2
+} 
+--5.自定义类型可以内嵌自定义类型
 
-1 = roup {
-    response = type.field
+2 = p2{
+    type.field mn{} =2
+    bool mb{}       =3
+    string ms{}     =1
+    number vn[]     =5
+    bool vb[]       =6
+    string vs[]     =8
+    number n        =20
+    bool b          =15
+    string str      =14
+    #{}
+}
+0= p0 {
+    #type
+}
+1=p1{
+    number n        =20
+    bool b          =15
+    string str      =14
+    # type.field
 }
 ]]
 
@@ -260,10 +285,10 @@ function parser.parse(text, filename, result)
     link(adjust(r), result, fnamepat:match(filename))
 end
 
-function parser.fparse(tbl)
+function parser.fparse(paths)
     local result = { T = {}, P = {} }
-    for _,path in pairs(tbl) do
-        local f = assert(io.open(path), "Can't open proto file:" .. path)
+    for _,path in pairs(paths) do
+        local f = assert(io.open(path), "Can't open proto file:" .. path..".")
         local text = f:read "*a"
         f:close()
         parser.parse(text, path, result)
