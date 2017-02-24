@@ -79,7 +79,7 @@ function val2str(arg1, arg2)
         for i = 1, n do
             str = str .. "  "
         end
-        k = k and tostring(k) .. ' = ' or ""
+        k = k and ((type(k) == "number") and "["..k.."] = " or k .. " = ") or ""
         local t = type(v)
         if t == "table" then
             if not next(v) then
