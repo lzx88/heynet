@@ -127,21 +127,23 @@ zproto_free(struct zproto *thiz){
 //	}
 //}
 const struct type *
-zproto_import(const struct zproto *zp, int idx) {
-	return 0 <= idx && idx < zp->tn ? &zp->t[idx] : NULL;
+zproto_import(const struct zproto *thiz, int idx) {
+	return 0 <= idx && idx < thiz->tn ? &thiz->t[idx] : NULL;
 }
-static struct protocol *
-zproto_query(struct zproto *thiz, int tag) {
-	int t, mid, begin = 0, end = thiz->pn;
-	while (begin < end) {
-		mid = (begin + end) >> 1;
-		t = thiz->p[mid].tag;
-		if (t == tag)
-			return &thiz->p[mid];
-		if (tag > t)
-			begin = mid + 1;
-		else
-			end = mid;
+
+const struct protocol *
+zproto_query(const struct zproto *thiz, const char *tyname) {
+	const struct type *ty;
+	for (int i = 0; i < thiz->pn; ++i) {
+		ty = zproto_import(thiz, thiz->p[i].request);
+		if (ty) {
+			while (*ty->name == *tyname || (*ty->name == '/' && *tyname == '.')) {
+				if (*tyname == '\0')
+					return &thiz->p[i];
+				++ty->name;
+				++tyname;
+			}
+		}
 	}
 	return NULL;
 }

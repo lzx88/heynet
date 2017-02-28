@@ -1,12 +1,11 @@
 local skynet = require "skynet"
 local proxy = require "socket_proxy"
-local sprotoloader = require "sprotoloader"
+local protocol = require "zproto_parser"
 local log = require "log"
+
 
 local client = {}
 
-local host
-local send
 local handler 
 
 function client.dispatch(c)
@@ -17,8 +16,7 @@ function client.dispatch(c)
 			return c
 		end
 		local msg, sz = proxy.read(fd)
-		local type, name, args, response = host:dispatch(msg, sz)
-		assert(type == "REQUEST")
+		local name, args, response = protocol.parse(msg, sz)
 		local f = handler[name]
 		if f then
 			-- f may block , so fork and run
@@ -27,7 +25,7 @@ function client.dispatch(c)
 				if ok then
 					proxy.write(fd, response(result))
 				elseif type(result) == "number" then
-					proxy.write(fd, send("error", result))
+					proxy.write(fd, protocol.packmsg("error", result))
 				else
 					log("Raise error = %s", result)
 				end
@@ -47,16 +45,8 @@ function client.close(fd)
 	proxy.close(fd)
 end
 
-function client.push(fd, t, data)
-	proxy.write(fd, send(t, data))
-end
-
-function client.proto()
-	local slot = skynet.getenv "sproto_slot_c2s"
-	host = sprotoloader.load(slot):host "package"
-	local slot = skynet.getenv "sproto_slot_s2c"
-	send = host:attach(sprotoloader.load(slot))
-	log("Load sproto")
+function client.push(fd, t, tbl)
+	proxy.write(fd, protocol.packmsg(t, tbl))
 end
 
 function client.init(cmds)

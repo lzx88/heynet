@@ -167,20 +167,23 @@ lsave(lua_State *L) {
 static int
 lload(lua_State *L) {
 	struct zproto* zp = ZP;
-	for (int i = 0; i < zp->pn; ++i)
-	{
-		struct protocol* p = &zp->p[i];
-		const struct type* request = zproto_import(zp, p->request);
-		lua_pushstring(L, request->name);
-		lua_pushinteger(L, p->tag);
-		lua_pushlightuserdata(L, (void*)request);
-		const struct type* response = zproto_import(zp, p->response);
-		if (response)
-			lua_pushlightuserdata(L, (void*)response);
-		else
-			lua_pushnil(L);
-	}
-	return 4 * zp->pn;
+	luaL_checktype(L, 1, LUA_TSTRING);
+	int sz;
+	const char *tyname = luaL_tolstring(L, 1, &sz);
+	const struct protocol* p = zproto_query(zp, tyname);
+	if (p == NULL)
+		return luaL_error(L, "Protocol %s not exist!", tyname);
+	const struct type* request = zproto_import(zp, p->request);
+	while (request->name[sz] != '/' && sz-- > 0);
+	lua_pushstring(L, request->name + sz + 1);
+	lua_pushinteger(L, p->tag);
+	lua_pushlightuserdata(L, (void*)request);
+	const struct type* response = zproto_import(zp, p->response);
+	if (response)
+		lua_pushlightuserdata(L, (void*)response);
+	else
+		lua_pushnil(L);
+	return 4;
 }
 
 static int

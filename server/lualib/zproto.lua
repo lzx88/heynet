@@ -1,47 +1,34 @@
 local core = require "zproto.core"
-local parser = require "zproto_parser"
 
 local zproto = {}
 
-function zproto.register(path)
-    local tmp = {}
+function zproto.load(path)
+    local files = {}
     io.loopfile(path, function(p)
-        table.insert(tmp, p)
+        table.insert(files, p)
     end)
-    local pt = parser.fparse(tmp)
-    assert(pt)
-    local zp = core.save(pt)
+    local TP = require("zproto_grammar").fparse(files)
+    local zp = core.save(TP)
     assert(zp)
 end
 
-function zproto.new()
-    local self = {
-        __cache = setmetatable( {} , { __mode = "v"}),
-    }
-    return setmetatable(self, zproto)
-end
+local __cache = setmetatable( {} , { __mode = "v"})
 
-function zproto.load()
-    local self = zproto.new()
-    local tbl = table.pack(core.load())
-    local i = 1
-    while i < tbl.n do
-        local name =  tbl[i]
-        self.__cache[name] = { tag = tbl[i + 1], request = tbl[i + 2], response = tbl[i + 3] }
-        i = i + 4
+function zproto.find(typename)
+    local protocol = __cache[typename]
+    if not protocol then
+        protocol = {}
+        protocol.tag, protocol.name, protocol.request, protocol.response = core.load(typename)
+        __cache[typename] = protocol
     end
+    return protocol
 end
 
-function zproto:find(name)
-    return self.__cache[name]
-end
-
-function zproto:encode(typename, tbl)
-    local proto = self:find(typename)
+function zproto.encode(typename, tbl)
     return core.encode(proto.tag, proto.request, tbl)
 end
 
-function zproto:decode(ty, data)
+function zproto.decode(ty, data)
     return core.decode(ty, data)
 end
 

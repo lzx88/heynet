@@ -1,5 +1,6 @@
 local skynet = require "skynet"
 local config = require "config"
+local protocol = require "zproto"
 
 skynet.start(function()
 	if not skynet.getenv "daemon" then
@@ -8,12 +9,9 @@ skynet.start(function()
 	local debug_port = tonumber(skynet.getenv "debug_port")
 	skynet.newservice("debug_console", debug_port)
 
-	local config_path = skynet.getenv "config_path"
-	config.load(config_path)
-	local loader = skynet.uniqueservice "protoloader"
-	local proto_path = 	skynet.getenv "proto_path"
-	skynet.call(loader, "lua", "load", proto_path)
-
+	config.load(skynet.getenv "config_path")
+	protocol.load(skynet.getenv "proto_path")
+	
 	local hub = skynet.uniqueservice "hub"
 	skynet.uniqueservice "db"
 	skynet.uniqueservice "center"

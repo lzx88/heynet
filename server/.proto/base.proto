@@ -5,23 +5,12 @@
 --4.内建关键字为 number, string, bool 不允许作为 字段name
 --5.自定义类型可以内嵌自定义类型
 --6.支持--单行注释
+0 = header {
+    number tag      = 1
+    bool shift      = 2
+    number session  = 3
+}
 
-type{
-  field {
-    string name     = 1--4.内建关键字为 number, string, bool 不允许作为 字段name
-
-    bool type[]   = 3
-  }
-  nest3 {
-    field type[]      = 3
-  }  
-  field fields{}  =2
-} 
---5.自定义类型可以内嵌自定义类型
-
-1=p1{
-    number n        =20
-    bool b          =15
-    string str      =14
-    # type.nest3
+1 = error {
+    number errno    = 1
 }

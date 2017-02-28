@@ -1,9 +1,0 @@
-require "util/luaext"
-require "util/io"
-local parser = require "zproto_parser"
-
-local r = parser.fparse({
-  "../.proto/test.proto",
-  "../.proto/dfd1.proto"
-  })
-dump(r)
