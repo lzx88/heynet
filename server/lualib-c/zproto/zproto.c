@@ -27,13 +27,13 @@ static void pool_free(struct memery *m) {
 
 /**********************zproto************************/
 static char
-test_endian(){
+test_bigendian(){
 	union {
 		char c;
 		short s;
 	}u;
 	u.s = 1;
-	return u.c == 1 ? 'L' : 'B';
+	return u.c == 1 ? 0 : 1;
 }
 
 void
@@ -57,7 +57,7 @@ zproto_done(struct zproto *thiz){
 	pool_init(&thiz->mem, thiz->mem.size);
 	struct zproto* z = pool_alloc(&thiz->mem, sizeof(*z));
 	memcpy(z, thiz, sizeof(*z));
-	z->endian = test_endian();
+	z->endian = test_bigendian();
 	z->p = pool_alloc(&z->mem, z->pn * sizeof(*z->p));
 	if (z->p) {
 		memcpy(z->p, thiz->p, z->pn * sizeof(*z->p));
@@ -155,22 +155,6 @@ findtag(const struct type *ty, int tag, int *begin) {
 }
 
 //encode/decode
-
-//#pragma pack(1)
-//struct header{
-//	const char magic[7] = "Z-PROTO";
-//	const char endian = G_Endian;
-//	uint16 nbytes;//包体字节数 最大64k
-//	uint16 msgid;//消息ID
-//	uint32 session;//会话标识
-//};
-//#pragma pack()
-
-//struct message{
-//	header head;
-//	zstruct content;
-//};
-
 #define SIZE_HEADER	2
 #define SIZE_FIELD	4
 #define NULL_CODE 1

@@ -6,7 +6,7 @@
 #include "lauxlib.h"
 #include "zproto.h"
 
-#define ENCODE_BUFFERSIZE (2 << 10)
+#define ENCODE_MINSIZE (2 << 10)
 #define ENCODE_MAXSIZE (16 << 20)
 #define ENCODE_BUFDEC 5//±àÂë»º´æÇøµ÷ÕûËÙ¶È
 #define ENCODE_DEEPLEVEL 64
@@ -204,32 +204,32 @@ struct encode_ud {
 	int deep;
 };
 static void *
-double_buffer(lua_State *L, int *sz) {
-	*sz *= 2;
-	if (*sz > ENCODE_MAXSIZE) {
+double_buffer(lua_State *L, int *size) {
+	*size *= 2;
+	if (*size > ENCODE_MAXSIZE) {
 		luaL_error(L, "object is too large (>%d)", ENCODE_MAXSIZE);
 		return NULL;
 	}
-	void *buf = lua_newuserdata(L, *sz);
+	char *buf = lua_newuserdata(L, *size);
 	lua_replace(L, lua_upvalueindex(1));
-	lua_pushinteger(L, *sz);
+	lua_pushinteger(L, *size);
 	lua_replace(L, lua_upvalueindex(2));
+	lua_pushinteger(L, 0);
+	lua_replace(L, lua_upvalueindex(3));
 	return buf;
 }
 static void *
-adjust_buffer(lua_State *L, int sz, int use, int rev) {
-	char *buffer = lua_touserdata(L, lua_upvalueindex(1));
-	if (((use + rev) << 1) < sz) {
+adjust_buffer(lua_State *L, int *size, int sz) {
+	char *buffer = NULL;
+	if (*size > ENCODE_MINSIZE && (sz << 1) < *size) {
 		int halftimes = lua_tointeger(L, lua_upvalueindex(3));
-		if (++halftimes == ENCODE_BUFDEC) {
+		if (++halftimes >= ENCODE_BUFDEC) {
 			halftimes = 0;
-			sz >>= 1;
-			char *tmp = lua_newuserdata(L, sz);
+			(*size) >>= 1;
+			buffer = lua_newuserdata(L, *size);
 			lua_replace(L, lua_upvalueindex(1));
-			lua_pushinteger(L, sz);
+			lua_pushinteger(L, *size);
 			lua_replace(L, lua_upvalueindex(2));
-			memcpy(tmp + rev, buffer + rev, use);
-			buffer = tmp;
 		}
 		lua_pushinteger(L, halftimes);
 		lua_replace(L, lua_upvalueindex(3));
@@ -333,39 +333,72 @@ encode(struct zproto_arg *args) {
 		return sz;
 	}
 }
+
+static int
+encode_header(lua_State *L, char *buffer, int size) {
+	int n = lua_type(L, 4) == LUA_TNUMBER ? 2 : 3;
+	int sz = sizeof(uint16) + n * sizeof(uint32);
+	if (size < sz)
+		return ZPROTO_CB_MEM;
+	*(uint16*)buffer = n;
+	buffer += sizeof(uint16);
+	*(uint32*)buffer = luaL_checkinteger(L, 3);//tag
+	*(uint32*)(buffer + sizeof(uint32)) = ZP->endian;//shift
+	if (n == 3)
+		*(uint32*)(buffer + 2 * sizeof(uint32)) = lua_tointeger(L, 4);//session
+	return sz;
+}
+
 static int
 lencode(lua_State *L) {
 	struct encode_ud self;
 	self.L = L;
 	char *buffer = lua_touserdata(L, lua_upvalueindex(1));
-	int sz = lua_tointeger(L, lua_upvalueindex(2));
-	int tag = lua_tointeger(L, 1);
-	const struct type *ty = lua_touserdata(L, 2);
+	int size = lua_tointeger(L, lua_upvalueindex(2));
+
+	int rev = size >> 3;//tips: 0pack×î»µÇé¿ö Ã¿16¸ö×Ö½ÚÊ×²¿»áÀ©³ä2¸ö×Ö½Ú encode Í·²¿»áÔ¤Áô size / 8 ¿Õ¼ä ÓÃÓÚ0pack
+	char *header = buffer + rev;
+	const int hlen = encode_header(header, size - rev);
+	if (hlen < 0)
+		return luaL_error(L, "Encode err no.%d!", hlen);
+	int sz = hlen + rev;
+
+	const struct type *ty = lua_touserdata(L, 1);
 	if (ty == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
-	self.table_index = 3;
-	self.tyname = ty->name;
-	luaL_checktype(L, self.table_index, LUA_TTABLE);
+	luaL_checktype(L, 2, LUA_TTABLE);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 2 + 8, NULL);
+	self.table_index = 2;
+	self.tyname = ty->name;
 	for (;;){
 		self.deep = 0;
 		self.iter_index = 0;
 		lua_settop(L, self.table_index);
-		int rev = sz >> 3;//tips: 0pack×î»µÇé¿ö Ã¿16¸ö×Ö½ÚÊ×²¿»áÀ©³ä2¸ö×Ö½Ú encode Í·²¿»áÔ¤Áô size / 8 ¿Õ¼ä ÓÃÓÚ0pack
-		buffer += rev;
-		int use = zproto_encode(ty, buffer, sz - rev, encode, &self);
-		if (use == ZPROTO_CB_MEM) {
-			buffer = double_buffer(L, &sz);
+		sz = zproto_encode(ty, header + hlen, size - sz, encode, &self);
+		if (sz == ZPROTO_CB_MEM) {
+			buffer = double_buffer(L, &size);
+			rev = size >> 3;
+			memcpy(buffer + rev, header, hlen);
+			header = buffer + rev;
+			sz = rev + hlen;
 			continue;
 		}
-		if (use < 0)
-			return luaL_error(L, "Encode err no.%d!", use);
-		buffer = adjust_buffer(L, sz, use, rev);
-		lua_pushlightuserdata(L, buffer + rev);
-		lua_pushinteger(L, use);
-		return 2;
+		if (sz < 0)
+			return luaL_error(L, "Encode err no.%d!", sz);
+		sz += hlen;
+		break;
 	}
-	return 0;//nohere
+	void *tmp = adjust_buffer(L, *size, sz + rev);
+	if (tmp){
+		buffer = tmp;
+		rev = size >> 3;
+		memcpy(buffer + rev, header, sz);
+	}
+	lua_pushlightuserdata(L, buffer + rev);
+	lua_pushinteger(L, sz);
+	lua_pushlightuserdata(L, buffer);
+	lua_pushinteger(L, size);
+	return 4;
 }
 
 struct decode_ud {
@@ -474,25 +507,39 @@ lpack(lua_State *L) {
 	size_t dlen;
 	void *des = (void*)getbuffer(L, 3, &dlen);
 	int len = zproto_pack(src, slen, des, dlen);
+	lua_pushlstring(L, des, len);
 	lua_pushinteger(L, len);
-	return 1;
+	return 2;
 }
 
 static int
 lunpack(lua_State *L) {
-	size_t slen;
-	const void *src = getbuffer(L, 1, &slen);
-	size_t dlen;
-	void *des = (void*)getbuffer(L, 3, &dlen);
-	int len = zproto_unpack(src, slen, des, dlen);
-	lua_pushinteger(L, len);
-	return 1;
+	int size, sz = 0;
+	const void *data = getbuffer(L, 1, &size);
+	void *buffer = lua_touserdata(L, lua_upvalueindex(1));
+	int size = lua_tointeger(L, lua_upvalueindex(2));
+	for (;;) {
+		sz = zproto_unpack(data, size, buffer, size);
+		if (sz == -1) {
+			buffer = double_buffer(L, &size);
+			continue;
+		}
+		if (sz < 0)
+			return luaL_error(L, "Unpack data is dirty!!!");
+		break;
+	}
+	void *tmp = adjust_buffer(L, &size, sz);
+	if (tmp)
+		buffer = tmp;
+	lua_pushlightuserdata(L, buffer);
+	lua_pushinteger(L, sz);
+	return 2;
 }
 
 static void
 pushfunc_withbuffer(lua_State *L, const char * name, lua_CFunction func) {
-	lua_newuserdata(L, ENCODE_BUFFERSIZE);
-	lua_pushinteger(L, ENCODE_BUFFERSIZE);
+	lua_newuserdata(L, ENCODE_MINSIZE);
+	lua_pushinteger(L, ENCODE_MINSIZE);
 	lua_pushinteger(L, 0);
 	lua_pushcclosure(L, func, 3);
 	lua_setfield(L, -2, name);
@@ -510,11 +557,11 @@ luaopen_zproto(lua_State *L) {
 		{ "load", lload },
 		{ "dump", ldump },
 		{ "decode", ldecode },
+		{ "pack", lpack },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);
 	pushfunc_withbuffer(L, "encode", lencode);
-	pushfunc_withbuffer(L, "pack", lpack);
 	pushfunc_withbuffer(L, "unpack", lunpack);
 	return 1;
 }

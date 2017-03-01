@@ -13,6 +13,7 @@ function zproto.load(path)
 end
 
 local __cache = setmetatable( {} , { __mode = "v"})
+local endianBig
 
 function zproto.find(typename)
     local protocol = __cache[typename]
@@ -20,12 +21,13 @@ function zproto.find(typename)
         protocol = {}
         protocol.tag, protocol.request, protocol.response = core.load(typename)
         __cache[typename] = protocol
+
     end
     return protocol
 end
 
-function zproto.encode(typename, tbl)
-    return core.encode(proto.tag, proto.request, tbl)
+function zproto.encode(ty, args, tag, session)
+    return core.pack(core.encode(ty, args, tag, session))
 end
 
 function zproto.decode(ty, data)
