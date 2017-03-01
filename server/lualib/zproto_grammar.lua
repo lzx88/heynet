@@ -157,7 +157,7 @@ local function adjust(r)
 end
 
 local function link(all, result, filename)
-    filename = filename and filename .."/" or ""
+    filename = filename and filename .."." or ""
     local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
@@ -288,7 +288,7 @@ end
 function grammar.fparse(paths)
     local result = { T = {}, P = {} }
     for _,path in pairs(paths) do
-        local f = assert(io.open(path), "Can't open proto file:" .. path..".")
+        local f = assert(io.open(path), "Can't open proto file:".. path ..".")
         local text = f:read "*a"
         f:close()
         grammar.parse(text, path, result)

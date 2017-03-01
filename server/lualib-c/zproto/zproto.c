@@ -136,14 +136,8 @@ zproto_query(const struct zproto *thiz, const char *tyname) {
 	const struct type *ty;
 	for (int i = 0; i < thiz->pn; ++i) {
 		ty = zproto_import(thiz, thiz->p[i].request);
-		if (ty) {
-			while (*ty->name == *tyname || (*ty->name == '/' && *tyname == '.')) {
-				if (*tyname == '\0')
-					return &thiz->p[i];
-				++ty->name;
-				++tyname;
-			}
-		}
+		if (ty && 0 == strcmp(ty->name, tyname))
+			return &thiz->p[i];
 	}
 	return NULL;
 }

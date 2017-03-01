@@ -49,10 +49,6 @@ function handler:signin(rqt)
 	return {token = self.token}
 end
 
-function handler:ping()
-	log("ping")
-end
-
 function auth.shakehand(fd)
 	local c = client.dispatch({ fd = fd }, handler)
 	return c.userid, c.token, c.loginrole

@@ -18,7 +18,7 @@ function zproto.find(typename)
     local protocol = __cache[typename]
     if not protocol then
         protocol = {}
-        protocol.tag, protocol.name, protocol.request, protocol.response = core.load(typename)
+        protocol.tag, protocol.request, protocol.response = core.load(typename)
         __cache[typename] = protocol
     end
     return protocol

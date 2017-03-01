@@ -31,7 +31,7 @@ require_impl = nil
 register(require_ctrl, function(name, ctrl)
 	table.loop(ctrl, function(func, cmd)
 		if type(func) == "function" then
-			assert(not hlist[cmd], "Ctrl proto cmd ".. name ..".".. cmd .. "repeat")
+			assert(not hlist[cmd], "Ctrl proto cmd ".. name ..".".. cmd .. " repeat")
 			hlist[cmd] = func
 		end
 	end)
