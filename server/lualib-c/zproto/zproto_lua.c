@@ -478,8 +478,8 @@ decode(const struct zproto_arg *args) {
 }
 
 static int
-decode_header(lua_State *L, char *buffer, int size) {
-	if (size < 8)
+decode_header(char *buffer, int size, bool shift) {
+	if (size < 4)
 		return ZPROTO_CB_MEM;
 	*buffer = ZP->endian;
 	size = lua_type(L, 4) == LUA_TNUMBER ? 0 : 1;
