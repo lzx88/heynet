@@ -5,17 +5,11 @@
 --4.内建关键字为 number, string, bool 不允许作为 字段name
 --5.自定义类型可以内嵌自定义类型
 --6.支持--单行注释
-0 = header {
-    number tag      = 1
-    bool bigendian  = 2
-    number session  = 3
-}
-
-1 = ping {
+0 = ping {
 	
 }
 
-2 = error {
+1 = error {
     number errno    = 1
 }
 

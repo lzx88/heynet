@@ -6,7 +6,7 @@ local log = require "log"
 
 local client = {}
 
-local handler 
+local handler
 
 function client.dispatch(c)
 	local fd = c.fd
@@ -16,7 +16,7 @@ function client.dispatch(c)
 			return c
 		end
 		local data, sz = proxy.read(fd)
-		local name, args, reply = msg.parse(data, sz)
+		local name, args, reply = msg.request(data, sz, "RQT")
 		local f = handler[name]
 		if f then
 			-- f may block , so fork and run

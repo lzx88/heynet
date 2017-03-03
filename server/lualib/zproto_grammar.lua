@@ -38,12 +38,13 @@ local newline = blankpat(lineend + comment)^1
 local function custompat(pat) return dummy * "{" * ((newline * pat * newline) + dummy) * "}" end
 local function namedpat(name, pat) return Ct(Cg(lpeg.Cc(name), "type") * pat) end
 local function multipat(pat) return Ct(pat^0 * (newline * pat)^0) end
+local fnamepat = ((P(1) - (P"/" + "\\"))^0 * (P"/" + "\\")^1)^0 * C(word) * (P"." * (alpha + alnum)^0)^0
 
 local protocol = P {
     "ALL",
     ALL = multipat(V"STRUCT" + V"PROTOCOL"),
     STRUCT = namedpat("struct", name * custompat(multipat(V"FIELD" + V"STRUCT"))),
-    PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(name) * V"PROTO"),
+    PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(typename) * V"PROTO"),
     PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
     RESPONSE = namedpat("response", P"#" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
     FIELD = namedpat("field", typename * blanks * name * (C"[]" + C"{}")^-1 * blankpat"=" * tag),
@@ -52,7 +53,7 @@ local protofile = dummy * protocol * dummy * eof
 
 local buildin = { number = -1, string = -2, bool = -3 }
 local function checkname(str)
-    assert(not buildin[str], "Buildin type: ".. str .." cann't be use for name.")
+    assert(not buildin[str], "Buildin type:".. str .." cann't be use for name.")
     return str
 end
 local function checktype(all, ptype, t)
@@ -107,7 +108,6 @@ function convert.struct(all, obj)
             end
         end
     end
-
     return result
 end
 function convert.protocol(all, obj)
@@ -156,8 +156,8 @@ local function adjust(r)
     return all
 end
 
-local function link(all, result, filename)
-    filename = filename and filename .."." or ""
+local function link(all, result)
+    if not result.protoname then result.protoname = {} end
     local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
@@ -186,7 +186,9 @@ local function link(all, result, filename)
 
     local tmp = {}
     for _,p in pairs(all.protocol) do
-        all.struct[p.request].name = filename .. p.request
+        local pname = all.struct[p.request].name
+        assert(not result.protoname[pname], "Redefined protocol name:" .. pname .. ".")
+        result.protoname[pname] = true
         p.request = gentypetag(p.request, tmp)
         if p.response then
             assert(type(p.response) == "string")
@@ -235,15 +237,14 @@ The protocol of zproto
 --6.支持--单行注释
 ]]
 
-
 local grammar = {}
 
-function grammar.parse(text, filename, result)
+function grammar.parse(text, path, result)
     if not result then result = { T = {}, P = {} } end
-    local state = { file = filename, pos = 0, line = 1 }
-    local r = lpeg.match(protofile + exception, text, 1, state )
-    local fnamepat = ((P(1) - (P"/" + "\\"))^0 * (P"/" + "\\")^1)^0 * C(word) * (P"." * (alpha + alnum)^0)^0
-    return link(adjust(r), result, fnamepat:match(filename))
+    local state = {file = path, pos = 0, line = 1}
+    local r = lpeg.match(protofile + exception, text, 1, state)
+    result.fname = fnamepat:match(path)
+    return link(adjust(r), result)
 end
 
 function grammar.fparse(paths)
