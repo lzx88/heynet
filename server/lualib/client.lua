@@ -1,6 +1,6 @@
 local skynet = require "skynet"
 local proxy = require "socket_proxy"
-local protocol = require "zproto_parser"
+local msg = require "zproto_msg"
 local log = require "log"
 
 
@@ -15,17 +15,17 @@ function client.dispatch(c)
 		if c.exit then
 			return c
 		end
-		local msg, sz = proxy.read(fd)
-		local name, args, response = protocol.parse(msg, sz)
+		local data, sz = proxy.read(fd)
+		local name, args, reply = msg.parse(data, sz)
 		local f = handler[name]
 		if f then
 			-- f may block , so fork and run
 			skynet.fork(function()
 				local ok, result = pcall(f, c, args)
 				if ok then
-					proxy.write(fd, response(result))
+					proxy.write(fd, reply(result))
 				elseif type(result) == "number" then
-					proxy.write(fd, protocol.packmsg("error", result))
+					proxy.write(fd, msg.pack("error", result))
 				else
 					log("Raise error = %s", result)
 				end
@@ -46,7 +46,7 @@ function client.close(fd)
 end
 
 function client.push(fd, t, tbl)
-	proxy.write(fd, protocol.packmsg(t, tbl))
+	proxy.write(fd, msg.pack(t, tbl))
 end
 
 function client.init(cmds)

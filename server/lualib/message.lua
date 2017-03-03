@@ -1,6 +1,6 @@
 local zproto = require "zproto"
 
-local msg = {}
+local msg = { session = 0 }
 
 local function msg_rsp(tp, session)
     if session then
@@ -19,7 +19,12 @@ end
 
 function msg.pack(tyname, tbl)
     local tp = zproto.find(tyname)
-    return zproto.pack(zproto.encode(tp.request, tbl, tp.tag))
+    local session = nil
+    if tp.response then
+        msg.session = msg.session + 1
+        session = msg.session
+    end
+    return zproto.pack(zproto.encode(tp.request, tbl, tp.tag, session))
 end
 
 return host

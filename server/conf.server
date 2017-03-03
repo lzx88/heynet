@@ -6,8 +6,8 @@ server_idx = 0
 --agent池默认值
 agent_pool_init = 2
 
-config_path = root .. ".config/*.cfg"
-proto_path = root .. ".proto/*.proto"
+config_path = root .. "config/*.cfg"
+proto_path = root .. "protocol/*.proto"
 
 gate_port = server_idx .. 5678
 debug_port = server_idx .. 8000
