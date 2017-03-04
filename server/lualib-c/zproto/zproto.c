@@ -7,6 +7,11 @@
 
 /**********************memery************************/
 #define CHUNK_SIZE 0x100000 //1M
+
+struct memery{
+	size_t size;
+	void *ptr;
+};
 static void
 pool_init(struct memery *m, size_t sz) {
 	m->size = 0;
@@ -25,6 +30,32 @@ static void pool_free(struct memery *m) {
 }
 
 /**********************zproto************************/
+struct field{
+	const char *name;
+	int tag;
+	int type;
+	int key;
+};
+struct type{
+	const char *name;
+	int maxn;
+	int n;
+	struct field *f;
+};
+struct protocol{
+	int tag;
+	int request;
+	int response;
+};
+struct zproto{
+	struct memery mem;
+	char endian;
+	int pn;
+	struct protocol *p;
+	int tn;
+	struct type *t;
+};
+
 static char
 test_bigendian(){
 	union {

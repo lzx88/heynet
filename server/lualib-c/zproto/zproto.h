@@ -10,40 +10,10 @@
 #define ZK_ARRAY  1
 #define ZK_MAP	  2
 
-typedef int64 integer;
-
-struct memery{
-	size_t size;
-	void *ptr;
-};
-
-struct field{
-	const char *name;
-	int tag;
-	int type;
-	int key;
-};
-struct type{
-	const char *name;
-	int maxn;
-	int n;
-	struct field *f;
-};
-
-struct protocol{
-	int tag;
-	int request;
-	int response;
-};
-struct zproto{
-	struct memery mem;
-	char endian;
-	int pn;
-	struct protocol *p;
-	int tn;
-	struct type *t;
-};
-
+struct field;
+struct type;
+struct protocol;
+struct zproto;
 struct zproto_arg {
 	const struct field *pf;
 	void *ud;
@@ -52,6 +22,7 @@ struct zproto_arg {
 	int index;
 	char shift;
 };
+typedef int64 integer;
 
 #define _shift16(p) (int16)p[1] | (int16)p[0] << 8
 #define _shift32(p) (int16)p[3] | (int16)p[2] << 8 | (int32)p[1] << 16 | (int32)p[0] << 24
