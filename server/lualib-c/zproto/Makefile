@@ -17,4 +17,5 @@ zproto.dll : zproto.c zproto_lua.c
 	gcc -O2 -Wall --shared -o $@ $^ -I/usr/local/include -L/usr/local/bin -llua53
 
 clean :
-rm -f zproto.so zproto.dll
+	rm -f zproto.so zproto.dll
+
