@@ -21,7 +21,9 @@
 }
 
 5 = signin {
-	
+	string userid = 1
+	number session = 2
+	#{}
 }
 
 6 = login {

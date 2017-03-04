@@ -1,22 +1,13 @@
 local socket = require "simplesocket"
-local sproto = require "sproto"
+local msg = require "message"
 
 local message = {}
 local var = {
-	session_id = 0 ,
-	session = {},
 	object = {},
 }
 
-function message.register(name)
-	local f = assert(io.open(name .. ".s2c"))
-	local t = f:read "a"
-	f:close()
-	var.host = sproto.parse(t):host "package"
-	local f = assert(io.open(name .. ".c2s"))
-	local t = f:read "a"
-	f:close()
-	var.request = var.host:attach(sproto.parse(t))
+function message.register(path)
+	require("zproto").load(path)
 end
 
 function message.peer(addr, port)
@@ -34,18 +25,15 @@ function message.bind(obj, handler)
 end
 
 function message.request(name, args)
-	var.session_id = var.session_id + 1
-	var.session[var.session_id] = { name = name, req = args }
-	socket.write(var.request(name , args, var.session_id))
-	return var.session_id
+	socket.write(msg.request(name, args))
 end
 
-function message.update(ti)
-	local msg = socket.read(ti)
-	if not msg then
+--[[function message.update(ti)
+	local stream = socket.read(ti)
+	if not stream then
 		return false
 	end
-	local t, session_id, resp, err = var.host:dispatch(msg)
+	local t, session_id, resp, err = (msg)
 	if t == "REQUEST" then
 		for obj, handler in pairs(var.object) do
 			local f = handler[session_id]	-- session_id is request type
@@ -82,6 +70,6 @@ function message.update(ti)
 	end
 
 	return true
-end
+end]]
 
 return message

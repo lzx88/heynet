@@ -2,13 +2,13 @@ local PATH,IP = ...
 
 IP = IP or "127.0.0.1"
 
-package.path = string.format("%s/client-simple/?.lua;%s/skynet/lualib/?.lua", PATH, PATH)
+package.path = string.format("%s/client-simple/?.lua;%s/skynet/lualib/?.lua;%s/lualib/?.lua", PATH, PATH, PATH)
 package.cpath = string.format("%s/skynet/luaclib/?.so;%s/client-simple/lsocket/?.so", PATH, PATH)
 
 local socket = require "simplesocket"
 local message = require "simplemessage"
 
-message.register(string.format("%s/game-proto/%s", PATH, "sproto"))
+message.register(string.format("%s/game-proto/*.proto", PATH))
 
 message.peer(IP, 5678)
 message.connect()
@@ -62,8 +62,8 @@ function event:push(args)
 	print("server push", args.text)
 end
 
-message.request("signin", { userid = "alice" })
+message.request("signin", { userid = "alice", session = 1323 })
 
-while true do
+--[[while true do
 	message.update()
-end
+end]]

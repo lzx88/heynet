@@ -362,7 +362,7 @@ lencode(lua_State *L) {
 
 	int rev = size >> 3;//tips: 0pack×î»µÇé¿ö Ã¿16¸ö×Ö½ÚÊ×²¿»áÀ©³ä2¸ö×Ö½Ú encode Í·²¿»áÔ¤Áô size / 8 ¿Õ¼ä ÓÃÓÚ0pack
 	char *header = buffer + rev;
-	const int hlen = encode_header(header, size - rev);
+	const int hlen = encode_header(L, header, size - rev);
 	if (hlen < 0)
 		return luaL_error(L, "Encode err no.%d!", hlen);
 	int sz = hlen + rev;
@@ -485,7 +485,7 @@ decode(const struct zproto_arg *args) {
 static int
 ldecode_header(lua_State *L) {
 	size_t size;
-	const void *data = getbuffer(L, 1, &size);
+	const char *data = getbuffer(L, 1, &size);
 	if (size < 4)
 		return luaL_error(L, "Decode error!");
 	bool shift = *data != ZP->endian;
@@ -502,7 +502,7 @@ ldecode_header(lua_State *L) {
 		lua_pushnumber(L, (uint32)shift32(data, shift));//session
 		lua_setfield(L, -2, "session");
 	}
-	lua_pushlightuserdata(L, data + 4);
+	lua_pushlightuserdata(L, (char*)data + 4);
 	lua_pushinteger(L, size - 4);
 	return 3;
 }
@@ -512,7 +512,7 @@ ldecode(lua_State *L) {
 	const struct type* ty = lua_touserdata(L, 1);
 	if (!ty)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
-	size_t size;
+	int size;
 	const void *data = getbuffer(L, 2, &size);
 	bool shift = lua_toboolean(L, 4);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
@@ -529,7 +529,7 @@ ldecode(lua_State *L) {
 	if (sz > size || sz < 0)
 		return luaL_error(L, "Decode error!");
 	lua_settop(L, self.result_index);
-	lua_pushlightuserdata(L, data + sz);
+	lua_pushlightuserdata(L, (char*)data + sz);
 	lua_pushinteger(L, size - sz);
 	return 3;
 }

@@ -131,7 +131,7 @@ zproto_import(const struct zproto *thiz, int idx) {
 	return 0 <= idx && idx < thiz->tn ? &thiz->t[idx] : NULL;
 }
 const struct protocol *
-zproto_findtag(struct zproto *thiz, int tag) {
+zproto_findtag(const struct zproto *thiz, int tag) {
 	int begin = 0, mid, end = thiz->pn, t;
 	while (begin < end) {
 		mid = (begin + end) / 2;
@@ -143,6 +143,7 @@ zproto_findtag(struct zproto *thiz, int tag) {
 		else
 			end = mid;
 	}
+	return NULL;
 }
 const struct protocol *
 zproto_findname(const struct zproto *thiz, const char *tyname) {
