@@ -22,7 +22,6 @@ pool_alloc(struct memery *m, size_t sz) {
 }
 static void pool_free(struct memery *m) {
 	free(m->ptr);
-	memset(m, 0, sizeof(*m));
 }
 
 /**********************zproto************************/
@@ -94,7 +93,7 @@ zproto_done(struct zproto *thiz){
 
 void
 zproto_free(struct zproto *thiz){
-	free(thiz->mem.ptr);
+	pool_free(&thiz->mem);
 	thiz = NULL;
 }
 //void
@@ -320,7 +319,8 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	}
 	return buffer - head;
 }
-int zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud) {
+int
+zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud) {
 	struct zproto_arg args;
 	const struct field* f;
 	uint32 *fdata = (uint32*)(buffer + SIZE_HEADER);
