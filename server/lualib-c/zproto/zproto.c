@@ -149,7 +149,8 @@ zproto_findtag(const struct zproto *thiz, int tag) {
 const struct protocol *
 zproto_findname(const struct zproto *thiz, const char *tyname) {
 	const struct type *ty;
-	for (int i = 0; i < thiz->pn; ++i) {
+	int i;
+	for (i = 0; i < thiz->pn; ++i) {
 		ty = zproto_import(thiz, thiz->p[i].request);
 		if (ty && 0 == strcmp(ty->name, tyname))
 			return &thiz->p[i];
@@ -237,8 +238,8 @@ encode_int_array(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) 
 				if (sz > size)
 					return ZPROTO_CB_MEM;
 				size -= sz;
-				for (int idx = args->index; idx >= 0; --idx)
-					*(uint64*)(buffer + idx * sizeof(uint64)) = *(uint32*)(buffer + idx * sizeof(uint32));
+				for (sz = args->index; sz >= 0; --sz)
+					*(uint64*)(buffer + sz * sizeof(uint64)) = *(uint32*)(buffer + sz * sizeof(uint32));
 			}
 		}
 		if (intlen == sizeof(uint64)) {
@@ -293,7 +294,7 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 			}
 			sz = cb(args);
 			CHECK_ARRAY_END(sz);
-			*buffer = (char)args->value;
+			*buffer = (int)args->value;
 			--size;
 			++buffer;
 		}
@@ -319,8 +320,7 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	}
 	return buffer - head;
 }
-int
-zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud) {
+int zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud) {
 	struct zproto_arg args;
 	const struct field* f;
 	uint32 *fdata = (uint32*)(buffer + SIZE_HEADER);
@@ -357,7 +357,7 @@ zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void 
 				break;
 			case ZT_BOOL:
 				sz = cb(&args);
-				fdata[fidx] = (uint32)encode_int((char)args.value);
+				fdata[fidx] = (uint32)encode_int((int)args.value);
 				break;
 			default:
 				args.value = data;
@@ -430,7 +430,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 				return ZPROTO_CB_MEM;
 			if (sz < 1)
 				return ZPROTO_CB_MEM;
-			args->value = (void*)*stream;
+			args->value = (int*)*stream;
 			cb(args);		
 		}
 		break;
@@ -508,7 +508,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 				args.value = &intv;
 				break;
 			case ZT_BOOL:
-				args.value = (void*)(decode_uint(val));
+				args.value = (int*)(decode_uint(val));
 				break;
 			default:
 				args.value = (void*)streamd;
