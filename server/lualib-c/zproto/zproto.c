@@ -53,6 +53,7 @@ zproto_alloc(struct zproto *thiz, size_t sz){
 
 struct zproto *
 zproto_done(struct zproto *thiz){
+	int i, j;
 	int sz = thiz->mem.size;
 	pool_init(&thiz->mem, thiz->mem.size);
 	struct zproto* z = pool_alloc(&thiz->mem, sizeof(*z));
@@ -66,7 +67,7 @@ zproto_done(struct zproto *thiz){
 	z->t = pool_alloc(&z->mem, z->tn * sizeof(*z->t));
 	if (z->t) {
 		memcpy(z->t, thiz->t, z->tn * sizeof(*z->t));
-		for (int i = 0; i < thiz->tn; ++i) {
+		for (i = 0; i < thiz->tn; ++i) {
 			struct type* zt = &z->t[i];
 			struct type* tt = &thiz->t[i];
 			zt->name = pool_alloc(&z->mem, strlen(tt->name) + 1);
@@ -74,7 +75,7 @@ zproto_done(struct zproto *thiz){
 			zt->f = pool_alloc(&z->mem, tt->n * sizeof(*tt->f));
 			if (zt->f) {
 				memcpy(zt->f, tt->f, tt->n * sizeof(*tt->f));
-				for (int j = 0; j < tt->n; ++j) {
+				for (j = 0; j < tt->n; ++j) {
 					zt->f[j].name = pool_alloc(&z->mem, strlen(tt->f[j].name) + 1);
 					strcpy((char*)zt->f[j].name, tt->f[j].name);
 					free((void*)tt->f[j].name);
