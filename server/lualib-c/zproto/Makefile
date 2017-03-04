@@ -18,3 +18,4 @@ zproto.dll : zproto.c zproto_lua.c
 
 clean :
 	rm -f zproto.so zproto.dll
+
