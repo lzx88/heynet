@@ -294,7 +294,7 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 			}
 			sz = cb(args);
 			CHECK_ARRAY_END(sz);
-			*buffer = (int)args->value;
+			*buffer = (bool)args->value;
 			--size;
 			++buffer;
 		}
@@ -357,7 +357,7 @@ int zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, v
 				break;
 			case ZT_BOOL:
 				sz = cb(&args);
-				fdata[fidx] = (uint32)encode_int((int)args.value);
+				fdata[fidx] = (uint32)encode_int((size_t)args.value);
 				break;
 			default:
 				args.value = data;
@@ -430,7 +430,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 				return ZPROTO_CB_MEM;
 			if (sz < 1)
 				return ZPROTO_CB_MEM;
-			args->value = (int*)*stream;
+			args->value = (void*)*stream;
 			cb(args);		
 		}
 		break;
@@ -508,7 +508,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 				args.value = &intv;
 				break;
 			case ZT_BOOL:
-				args.value = (int*)(decode_uint(val));
+				args.value = (void*)(decode_uint(val));
 				break;
 			default:
 				args.value = (void*)streamd;
@@ -556,16 +556,16 @@ pack_seg_ff(const char *src, int slen, char *des) {
 	return nozero;
 }
 int
-zproto_pack(const char* input, int ilen, char *output, int olen) {
-	char *ffp = NULL, *buf = output;
+zproto_pack(const char* data, int size, char *buffer, int len) {
+	char *ffp = NULL, *buf = buffer;
 	int i, n, ffn = 0;
-	for (i = 0; i < ilen; i += 8) {
+	for (i = 0; i < size; i += 8) {
 		if (ffn == 0) {
-			n = pack_seg(input, ilen - i, buf, olen);
+			n = pack_seg(data, size - i, buf, len);
 			if (n < 0)
 				return -1;
 			if (n == 9)	{
-				if (olen < 10)
+				if (len < 10)
 					return -1;
 				ffp = buf + 1;
 				for (n = 8; n > 0; --n)
@@ -576,9 +576,9 @@ zproto_pack(const char* input, int ilen, char *output, int olen) {
 			}
 		}
 		else {
-			if (olen < 8)
+			if (len < 8)
 				return -1;
-			n = pack_seg_ff(input, ilen - i, buf);
+			n = pack_seg_ff(data, size - i, buf);
 			if (n >= 6 && ffn < 256){
 				*ffp = ffn;
 				++ffn;
@@ -586,51 +586,51 @@ zproto_pack(const char* input, int ilen, char *output, int olen) {
 			}
 			else {
 				ffn = 0;
-				n = pack_seg(input, ilen - i, buf, olen);
+				n = pack_seg(data, size - i, buf, len);
 			}
 		}
-		input += 8;
+		data += 8;
 		buf += n;
-		olen -= n;
+		len -= n;
 	}
-	return buf - output;
+	return buf - buffer;
 }
 int
-zproto_unpack(const char *input, int ilen, char *output, int olen) {
+zproto_unpack(const char *data, int size, char *buffer, int len) {
 	unsigned char seg0;
-	char *buf = output;
+	char *buf = buffer;
 	int n;
-	while (ilen-- > 0) {
-		seg0 = *input++;
+	while (size-- > 0) {
+		seg0 = *data++;
 		if (seg0 == 0xFF) {
-			if (--ilen < 0)
+			if (--size < 0)
 				return -2;
-			n = ((unsigned char)*input + 1) << 3;
-			if (ilen < n)
+			n = ((unsigned char)*data + 1) << 3;
+			if (size < n)
 				return -2;
-			if (olen < n)
+			if (len < n)
 				return -1;
-			memcpy(buf, ++input, n);
-			ilen -= n;
-			olen -= n;
+			memcpy(buf, ++data, n);
+			size -= n;
+			len -= n;
 			buf += n;
-			input += n;
+			data += n;
 		}
 		else {
 			for (n = 0; n < 8; ++n) {
-				if (--olen < 0)
+				if (--len < 0)
 					return -1;
 				if ((seg0 >> n) & 1) {
-					if (--ilen < 0)
+					if (--size < 0)
 						return -2;
-					*buf++ = *input++;
+					*buf++ = *data++;
 				}
 				else
 					*buf++ = 0;
 			}
 		}
 	}
-	return buf - output;
+	return buf - buffer;
 }
 //int test(void) {
 //	// your code goes here

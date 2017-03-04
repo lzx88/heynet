@@ -74,8 +74,8 @@ const struct protocol *zproto_findtag(const struct zproto *thiz, int tag);
 #define ZPROTO_CB_NIL		-3
 
 typedef int(*zproto_cb)(struct zproto_arg *args);
-int zproto_encode(const struct type *ty, void *buffer, int size, zproto_cb cb, void *ud);
+int zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud);
 int zproto_decode(const struct type *ty, const char *data, int size, bool shift, zproto_cb cb, void *ud);
-int zproto_pack(const char* input, int ilen, char *output, int olen);
-int zproto_unpack(const char *input, int lien, char *output, int olen);
+int zproto_pack(const char* data, int size, char *buffer, int len);
+int zproto_unpack(const char *data, int size, char *buffer, int len);
 #endif
