@@ -86,6 +86,7 @@ int sigign() {
 
 static const char * load_config = "\
 	local config_name = ...\
+	print(config_name)\
 	local f = assert(io.open(config_name))\
 	local code = assert(f:read \'*a\')\
 	local function getenv(name) return assert(os.getenv(name), \'os.getenv() failed: \' .. name) end\
@@ -93,7 +94,7 @@ static const char * load_config = "\
 	f:close()\
 	local result = {}\
 	local function include(path) loadfile(path,'t',result)() end\
-	setmetatable(result, {__index = { include = include}})\
+	setmetatable(result, {__index = {include = include}})\
 	assert(load(code,\'=(load)\',\'t\',result))()\
 	return result\
 ";
