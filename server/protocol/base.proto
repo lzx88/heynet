@@ -13,8 +13,7 @@
     number errno    = 1
 }
 
-3 = signup {
-｝
+3 = signup {}
 
 4 = create_role {
 	

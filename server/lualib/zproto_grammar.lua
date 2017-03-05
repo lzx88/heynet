@@ -247,15 +247,4 @@ function grammar.parse(text, path, result)
     return link(adjust(r), result)
 end
 
-function grammar.fparse(paths)
-    local result = { T = {}, P = {} }
-    for _,path in pairs(paths) do
-        local f = assert(io.open(path), "Can't open proto file:".. path ..".")
-        local text = f:read "*a"
-        f:close()
-        grammar.parse(text, path, result)
-    end
-    return result
-end
-
 return grammar

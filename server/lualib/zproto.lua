@@ -1,17 +1,18 @@
+local skynet = require "skynet"
 local core = require "zproto.core"
 
 local zproto = {}
 
 function zproto.load(path)
-    local files = {}
-    io.loopfile(path, function(p)
-        table.insert(files, p)
+    local result
+    io.loopfile(path, function(file)
+        local f = assert(io.open(file), "Can't open protocol file:".. file ..".")
+        local text = f:read "*a"
+        f:close()
+        result = require("zproto_grammar").parse(text, file, result)
+        skynet.error("Load protocol", file)
     end)
-    local TP = require("zproto_grammar").fparse(files)
-    dump(TP)
-	local zp = core.save(TP)
-    dump(zp)
-    assert(zp)
+	core.save(core.create(result))
 end
 
 local __cache = setmetatable( {} , { __mode = "v"})
