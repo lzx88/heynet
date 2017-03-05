@@ -248,3 +248,4 @@ function grammar.parse(text, path, result)
 end
 
 return grammar
+

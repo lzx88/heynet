@@ -12,7 +12,7 @@ function zproto.load(path)
         result = require("zproto_grammar").parse(text, file, result)
         skynet.error("Load protocol", file)
     end)
-	core.save(core.create(result))
+    core.save(core.create(result))
 end
 
 local __cache = setmetatable( {} , { __mode = "v"})
@@ -35,3 +35,4 @@ zproto.encode = core.encode
 zproto.decode_header = core.decode_header
 
 return zproto
+
