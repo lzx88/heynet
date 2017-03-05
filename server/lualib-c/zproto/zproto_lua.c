@@ -66,9 +66,8 @@ static int zgetfieldint(lua_State* L, const char *key) {
 }
 
 static char* zgetfieldstring(lua_State* L, struct zproto *zp, const char *key){
-	char buf[256] = { 0 };
 	lua_getfield(L, -1, key);
-	int len;
+	size_t len;
 	const char *name = lua_tolstring(L, -1, &len);
 	if (NULL == name)
 		luaL_error(L, "Field %s isn't string", key);
@@ -85,15 +84,15 @@ static struct zproto *ZP = NULL;
 
 static int
 lcreate(lua_State *L) {
-	int idx = lua_gettop(L);
+	int n;
 	struct zproto zp;
 	zproto_init(&zp);
 	luaL_checktype(L, 1, LUA_TTABLE);
 	lua_getfield(L, -1, "P");
 	if (lua_istable(L, -1)) {
 		zp.pn = lua_rawlen(L, -1);
-		zp.p = (struct protocol*)zproto_alloc(&zp, sizeof(*zp.p) * zp.pn);
-		for (int n = 0; n < zp.pn; ++n){
+		zp.p = (struct zprotocol*)zproto_alloc(&zp, sizeof(*zp.p) * zp.pn);
+		for (n = 0; n < zp.pn; ++n){
 			lua_geti(L, -1, n + 1);
 			if (lua_istable(L, -1)) {
 				zp.p[n].tag = zgetfieldint(L, "tag");
@@ -108,9 +107,9 @@ lcreate(lua_State *L) {
 	lua_getfield(L, -1, "T");
 	if (lua_istable(L, -1)) {
 		zp.tn = 1 + lua_rawlen(L, -1);
-		zp.t = (struct type*)zproto_alloc(&zp, sizeof(*zp.t) * zp.tn);
-		for (int n = 0; n < zp.tn; ++n) {
-			struct type* ty = &zp.t[n];
+		zp.t = (struct ztype*)zproto_alloc(&zp, sizeof(*zp.t) * zp.tn);
+		for (n = 0; n < zp.tn; ++n) {
+			struct ztype* ty = &zp.t[n];
 			lua_geti(L, -1, n);
 			ty->name = zgetfieldstring(L, &zp, "name");
 			ty->n = 0;
@@ -121,7 +120,7 @@ lcreate(lua_State *L) {
 			if (lua_istable(L, -1)) {
 				ty->n = lua_rawlen(L, -1);
 				ty->maxn = ty->n;
-				ty->f = (struct field*)zproto_alloc(&zp, sizeof(*ty->f) * ty->n);
+				ty->f = (struct zfield*)zproto_alloc(&zp, sizeof(*ty->f) * ty->n);
 				for (int j = 0; j < ty->n ; ++j) {
 					lua_geti(L, -1, j + 1);
 					if (lua_istable(L, -1)) {
@@ -167,8 +166,8 @@ lsave(lua_State *L) {
 static int
 lload(lua_State *L) {
 	struct zproto* zp = ZP;
-	const struct protocol* p;
-	int t = lua_type(L, 1);
+	const struct zprotocol* p;
+	size_t t = lua_type(L, 1);
 	if (t == LUA_TNUMBER)
 		p = zproto_findtag(zp, lua_tointeger(L, 1));
 	else if (t == LUA_TSTRING)
@@ -178,10 +177,10 @@ lload(lua_State *L) {
 	if (p == NULL)
 		return luaL_error(L, "Protocol not exist!");
 	lua_pushinteger(L, p->tag);
-	const struct type* request = zproto_import(zp, p->request);
+	const struct ztype* request = zproto_import(zp, p->request);
 	lua_pushstring(L, request->name);
 	lua_pushlightuserdata(L, (void*)request);
-	const struct type* response = zproto_import(zp, p->response);
+	const struct ztype* response = zproto_import(zp, p->response);
 	if (response)
 		lua_pushlightuserdata(L, (void*)response);
 	else
@@ -244,7 +243,7 @@ adjust_buffer(lua_State *L, int *size, int sz) {
 static int
 encode(struct zproto_arg *args) {
 	struct encode_ud *self = args->ud;
-	const struct field* f = args->pf;
+	const struct zfield* f = args->pf;
 	lua_State *L = self->L;
 	int sz = 0;
 	if (self->deep >= ENCODE_DEEPLEVEL)
@@ -277,10 +276,10 @@ encode(struct zproto_arg *args) {
 			if (LUA_TNUMBER == lua_type(L, -2)) {
 				if (16 > args->length)
 					return ZPROTO_CB_MEM;
-				sz = sprintf(args->value, "\x20%d\0", lua_tointeger(L, -2)) + 1;
+				sz = sprintf(args->value, "\x20%d%s", (int)lua_tointeger(L, -2), "\0") + 1;
 			}
 			else {
-				const char *str = lua_tolstring(L, -2, &sz);
+				const char *str = lua_tolstring(L, -2, (size_t*)&sz);
 				if (NULL == str)
 					return luaL_error(L, "%s.%s should be a map key type (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
 				if (++sz > args->length)
@@ -302,29 +301,31 @@ encode(struct zproto_arg *args) {
 	case ZT_INTEGER: // notice: in lua 5.2, lua_Integer maybe 52bit
 		if (LUA_TNUMBER != lua_type(L, -1))
 			return luaL_error(L, "%s.%s is not a number (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
-		integer v = (integer)lua_tonumberx(L, -1, &sz);
+		integer v = (integer)lua_tonumber(L, -1);
 		*(integer *)args->value = v;
 		lua_pop(L, 1);
-		return v & ~0x7FffFFff ? 8 : 4;
+		sz = v & ~0x7FffFFff ? 8 : 4;
+		break;
 	case ZT_BOOL:
 		if (!lua_isboolean(L, -1))
 			return luaL_error(L, "%s.%s is not a bool (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
 		args->value = (void*)lua_toboolean(L, -1);
 		lua_pop(L, 1);
-		return 0;
+		sz = 0;
+		break;
 	case ZT_STRING:
 		if (!lua_isstring(L, -1))
 			return luaL_error(L, "%s.%s is not a string (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
-		const char *str = lua_tolstring(L, -1, &sz);
+		const char *str = lua_tolstring(L, -1, (size_t*)&sz);
 		if (sz > args->length)
 			return ZPROTO_CB_MEM;
 		memcpy(args->value, str, sz);
 		lua_pop(L, 1);
-		return sz;
+		break;
 	default:
 		if (!lua_istable(L, -1))
 			return luaL_error(L, "%s.%s is not a table (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
-		const struct type *ty = zproto_import(ZP, f->type);
+		const struct ztype *ty = zproto_import(ZP, f->type);
 		if (NULL == ty)
 			return luaL_error(L, "encode error!");
 		struct encode_ud sub;
@@ -335,8 +336,9 @@ encode(struct zproto_arg *args) {
 		sub.deep = self->deep + 1;
 		sz = zproto_encode(ty, args->value, args->length, encode, &sub);
 		lua_settop(L, sub.table_index - 1);	// pop the value
-		return sz;
+		break;
 	}
+	return sz;
 }
 
 static int
@@ -367,7 +369,7 @@ lencode(lua_State *L) {
 		return luaL_error(L, "Encode err no.%d!", hlen);
 	int sz = hlen + rev;
 
-	const struct type *ty = lua_touserdata(L, 1);
+	const struct ztype *ty = lua_touserdata(L, 1);
 	if (ty == NULL)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	luaL_checktype(L, 2, LUA_TTABLE);
@@ -423,8 +425,8 @@ getbuffer(lua_State *L, int index, size_t *sz) {
 	return lua_touserdata(L, index);
 }
 static int
-decode(const struct zproto_arg *args) {
-	const struct field *f = args->pf;
+decode(struct zproto_arg *args) {
+	const struct zfield *f = args->pf;
 	struct decode_ud *self = args->ud;
 	lua_State *L = self->L;
 	if (self->deep >= ENCODE_DEEPLEVEL)
@@ -445,7 +447,7 @@ decode(const struct zproto_arg *args) {
 		lua_pushnumber(L, (lua_Number)*(integer*)args->value);
 		break;
 	case ZT_BOOL:
-		lua_pushboolean(L, (int)args->value);
+		lua_pushboolean(L, args->value == 0 ? 0 : 1);
 		break;
 	case ZT_STRING:
 		lua_pushlstring(L, args->value, args->length);
@@ -459,7 +461,7 @@ decode(const struct zproto_arg *args) {
 		sub.key = NULL;
 		sub.L = L;
 		lua_pushnil(L);
-		const struct type *ty = zproto_import(ZP, f->type);
+		const struct ztype *ty = zproto_import(ZP, f->type);
 		if (ty == NULL)
 			return luaL_error(L, "Invalid type");
 		if (args->length != zproto_decode(ty, args->value, args->length, args->shift, decode, &sub))
@@ -509,11 +511,11 @@ ldecode_header(lua_State *L) {
 
 static int
 ldecode(lua_State *L) {
-	const struct type* ty = lua_touserdata(L, 1);
+	const struct ztype* ty = lua_touserdata(L, 1);
 	if (!ty)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	int size;
-	const void *data = getbuffer(L, 2, &size);
+	const void *data = getbuffer(L, 2, (size_t*)&size);
 	bool shift = lua_toboolean(L, 4);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
 	if (!lua_istable(L, -1))
@@ -548,7 +550,8 @@ lpack(lua_State *L) {
 
 static int
 lunpack(lua_State *L) {
-	int len, size, sz;
+	int size, sz;
+	size_t len;
 	const void *data = getbuffer(L, 1, &len);
 	void *buffer = lua_touserdata(L, lua_upvalueindex(1));
 	size = lua_tointeger(L, lua_upvalueindex(2));
@@ -578,7 +581,7 @@ pushfunc_withbuffer(lua_State *L, const char *name, lua_CFunction func) {
 }
 
 int
-luaopen_zproto(lua_State *L) {
+luaopen_zproto_core(lua_State *L) {
 #ifdef luaL_checkversion
 	luaL_checkversion(L);
 #endif

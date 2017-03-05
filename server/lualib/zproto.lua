@@ -8,7 +8,9 @@ function zproto.load(path)
         table.insert(files, p)
     end)
     local TP = require("zproto_grammar").fparse(files)
-    local zp = core.save(TP)
+    dump(TP)
+	local zp = core.save(TP)
+    dump(zp)
     assert(zp)
 end
 

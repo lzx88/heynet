@@ -5,13 +5,16 @@
 #include "msvcint.h"
 #include "zproto.h"
 
+#define _shift16(p) (int16)p[1] | (int16)p[0] << 8
+#define _shift32(p) (int16)p[3] | (int16)p[2] << 8 | (int32)p[1] << 16 | (int32)p[0] << 24
+#define _shift64(p) (int16)p[7] | (int16)p[6] << 8 | (int32)p[5] << 16 | (int32)p[4] << 24 | (int64)p[3] << 32 | (int64)p[2] << 40 | (int64)p[1] << 48 | (int64)p[0] << 56
+int16 shift16(const char* p, bool shift){ return shift ? _shift16(p) : *(int16*)p; }
+int32 shift32(const char* p, bool shift){ return shift ? _shift32(p) : *(int32*)p; }
+int64 shift64(const char* p, bool shift){ return shift ? _shift64(p) : *(int64*)p; }
+
 /**********************memery************************/
 #define CHUNK_SIZE 0x100000 //1M
 
-struct memery{
-	size_t size;
-	void *ptr;
-};
 static void
 pool_init(struct memery *m, size_t sz) {
 	m->size = 0;
@@ -30,31 +33,7 @@ static void pool_free(struct memery *m) {
 }
 
 /**********************zproto************************/
-struct field{
-	const char *name;
-	int tag;
-	int type;
-	int key;
-};
-struct type{
-	const char *name;
-	int maxn;
-	int n;
-	struct field *f;
-};
-struct protocol{
-	int tag;
-	int request;
-	int response;
-};
-struct zproto{
-	struct memery mem;
-	char endian;
-	int pn;
-	struct protocol *p;
-	int tn;
-	struct type *t;
-};
+
 
 static char
 test_bigendian(){
@@ -84,7 +63,7 @@ zproto_alloc(struct zproto *thiz, size_t sz){
 struct zproto *
 zproto_done(struct zproto *thiz){
 	int i, j;
-	int sz = thiz->mem.size;
+	size_t sz = thiz->mem.size;
 	pool_init(&thiz->mem, thiz->mem.size);
 	struct zproto* z = pool_alloc(&thiz->mem, sizeof(*z));
 	memcpy(z, thiz, sizeof(*z));
@@ -98,8 +77,8 @@ zproto_done(struct zproto *thiz){
 	if (z->t) {
 		memcpy(z->t, thiz->t, z->tn * sizeof(*z->t));
 		for (i = 0; i < thiz->tn; ++i) {
-			struct type* zt = &z->t[i];
-			struct type* tt = &thiz->t[i];
+			struct ztype* zt = &z->t[i];
+			struct ztype* tt = &thiz->t[i];
 			zt->name = pool_alloc(&z->mem, strlen(tt->name) + 1);
 			strcpy((char*)zt->name, tt->name);
 			zt->f = pool_alloc(&z->mem, tt->n * sizeof(*tt->f));
@@ -157,11 +136,11 @@ zproto_free(struct zproto *thiz){
 //		printf("\n");
 //	}
 //}
-const struct type *
+const struct ztype *
 zproto_import(const struct zproto *thiz, int idx) {
 	return 0 <= idx && idx < thiz->tn ? &thiz->t[idx] : NULL;
 }
-const struct protocol *
+const struct zprotocol *
 zproto_findtag(const struct zproto *thiz, int tag) {
 	int begin = 0, mid, end = thiz->pn, t;
 	while (begin < end) {
@@ -176,9 +155,9 @@ zproto_findtag(const struct zproto *thiz, int tag) {
 	}
 	return NULL;
 }
-const struct protocol *
+const struct zprotocol *
 zproto_findname(const struct zproto *thiz, const char *tyname) {
-	const struct type *ty;
+	const struct ztype *ty;
 	int i;
 	for (i = 0; i < thiz->pn; ++i) {
 		ty = zproto_import(thiz, thiz->p[i].request);
@@ -188,9 +167,9 @@ zproto_findname(const struct zproto *thiz, const char *tyname) {
 	return NULL;
 }
 
-static const struct field *
-findtag(const struct type *ty, int tag, int *begin) {
-	const struct field *f;
+static const struct zfield *
+findtag(const struct ztype *ty, int tag, int *begin) {
+	const struct zfield *f;
 	int end = ty->n;
 	for (; *begin < end; ++(*begin)) {
 		f = &ty->f[*begin];
@@ -308,7 +287,7 @@ encode_int_map(zproto_cb cb, struct zproto_arg *args, char* buffer, int size) {
 }
 static int
 encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
-	const struct field* f = args->pf;
+	const struct zfield* f = args->pf;
 	const char* head = buffer;
 	int sz;
 	switch (f->type) {
@@ -351,9 +330,9 @@ encode_array(zproto_cb cb, struct zproto_arg *args, char *buffer, int size) {
 	return buffer - head;
 }
 int
-zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud) {
+zproto_encode(const struct ztype *ty, char *buffer, int size, zproto_cb cb, void *ud) {
 	struct zproto_arg args;
-	const struct field* f;
+	const struct zfield* f;
 	uint32 *fdata = (uint32*)(buffer + SIZE_HEADER);
 	int fidx = 0, lasttag = 0, sz = 0;
 	int i = SIZE_HEADER + ty->maxn * SIZE_FIELD;
@@ -432,7 +411,7 @@ decode_key(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size
 }
 static int
 decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size) {
-	const struct field *f = args->pf;
+	const struct zfield *f = args->pf;
 	int sz = size;
 	int n;
 	switch (f->type) {
@@ -461,7 +440,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 				return ZPROTO_CB_MEM;
 			if (sz < 1)
 				return ZPROTO_CB_MEM;
-			args->value = *stream == 0 ? 0 : 1;
+			args->value = (void*)*stream;
 			cb(args);		
 		}
 		break;
@@ -485,11 +464,11 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 	return size - sz;
 }
 int
-zproto_decode(const struct type *ty, const char *data, int size, bool shift, zproto_cb cb, void *ud) {
+zproto_decode(const struct ztype *ty, const char *data, int size, bool shift, zproto_cb cb, void *ud) {
 	const char *streamf, *streamd;
 	struct zproto_arg args;
 	int i, tag, sz, begin;
-	const struct field *f;
+	const struct zfield *f;
 	integer intv;
 	uint16 fn;
 	uint32 val;
@@ -539,7 +518,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 				args.value = &intv;
 				break;
 			case ZT_BOOL:
-				args.value = (decode_uint(val)) == 0 ? 0 : 1;
+				args.value = (void*)(decode_uint(val));
 				break;
 			default:
 				args.value = (void*)streamd;
