@@ -25,5 +25,4 @@ zproto.dll : zproto.c zproto_lua.c
 	$(CC) -Wall --shared -o $@ $^ -I/usr/local/include -L/usr/local/bin -llua53
 
 clean :
-	rm -f $(LUA_CLIB_PATH)/zproto.so zproto.dll
-
+	rm -f $(LUA_CLIB_PATH)zproto.so zproto.dll
