@@ -3,9 +3,9 @@
 LUA_CLIB_PATH=.
 ZPROTO_PATH=$(LUA_CLIB_PATH)/zproto
 
-CC=gcc -std=gnu99 -g
-CFLAGS=-O2 -Wall -Wextra $(SYSCFLAGS) $(MYCFLAGS)
-
+CC=gcc -std=gnu99 -O2 
+CFLAGS=-Wall -Wextra $(SYSCFLAGS) $(MYCFLAGS)
+CDEBUG=-g -O0
 SYSCFLAGS=-Wno-int-to-pointer-cast
 MYCFLAGS=-I../skynet/3rd/lua
 
@@ -19,7 +19,7 @@ macosx:
 win32: zproto.dll
 
 $(LUA_CLIB_PATH)/zproto.so : $(ZPROTO_PATH)/zproto.c $(ZPROTO_PATH)/zproto_lua.c
-	env $(CC) $(CFLAGS) $(DLLFLAGS) -o $@ $^
+	env $(CC) $(CDEBUG) $(CFLAGS) $(DLLFLAGS) -o $@ $^
 
 zproto.dll : zproto.c zproto_lua.c
 	$(CC) -Wall --shared -o $@ $^ -I/usr/local/include -L/usr/local/bin -llua53

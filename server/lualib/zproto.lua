@@ -8,10 +8,7 @@ function zproto.load(path)
         table.insert(files, p)
     end)
     local TP = require("zproto_grammar").fparse(files)
-    dump(TP)
-	local zp = core.save(TP)
-    dump(zp)
-    assert(zp)
+    core.save(core.create(TP))
 end
 
 local __cache = setmetatable( {} , { __mode = "v"})
@@ -34,3 +31,4 @@ zproto.encode = core.encode
 zproto.decode_header = core.decode_header
 
 return zproto
+
