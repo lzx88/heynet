@@ -16,7 +16,7 @@ local function init()
     }
     DB = redis.connect(conf)
 
-    moduled.register(DB, CMD)
+    moduled.dispatch(DB, CMD)
 end
 
 game.start{

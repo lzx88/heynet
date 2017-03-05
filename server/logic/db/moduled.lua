@@ -1,4 +1,4 @@
-local require_d = {
+local require_db = {
 	R = "role_db",
 	B = "bag_db",
 	U = "user_db",
@@ -10,12 +10,12 @@ local keys = {}
 
 local moduled = {}
 
-function moduled.register(DB, CMD)
+function moduled.dispatch(DB, CMD)
 	local function loopcmd(files, func)
 		table.loop(files, function(fname, mainkey)
 			local pos = string.match(fname, "()_db$")
 			local mod = string.sub(fname, 1, pos and (pos - 1))
-			assert(keys[mod] == nil, "Redis key".. mainkey .." repeat!")
+			assert(keys[mod] == nil, "Redis key".. mod .." repeat!")
 			keys[mod] = mainkey
 			local tbl = require(fname)
 			table.loop(tbl, function(f, k)
@@ -33,8 +33,8 @@ function moduled.register(DB, CMD)
 		end
 	end)
 
-	require_db = nil
 	setmetatable(CMD, __index = mt)
+	require_db = nil
 end
 
 --call partner

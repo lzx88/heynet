@@ -1,19 +1,14 @@
-logic_root = root.."service/logic/"
+logic_root = root.."logic/"
 logic_path = logic_root.."?.lua;"..logic_root.."agent/?.lua;"..logic_root.."center/?.lua;"..logic_root.."scene/?.lua;"..logic_root.."db/?.lua;"
 
---服务器索引
-server_idx = 0
 --agent池默认值
 agent_pool_init = 2
 
 config_path = root .. "config/*.cfg"
 proto_path = root .. "protocol/*.proto"
 
-gate_port = server_idx .. 5678
-debug_port = server_idx .. 8000
-
-sproto_slot_c2s = 1
-sproto_slot_s2c = 2
+gate_port = 800 .. $(SERVER_ID)
+debug_port = 900 .. $(SERVER_ID)
 
 redis_host = "127.0.0.1"
 redis_port = 6379
