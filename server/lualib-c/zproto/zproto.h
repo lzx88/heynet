@@ -10,34 +10,55 @@
 #define ZK_ARRAY  1
 #define ZK_MAP	  2
 
-struct field;
-struct type;
-struct protocol;
-struct zproto;
+struct memery{
+	size_t size;
+	void *ptr;
+};
 
+struct zfield{
+	const char *name;
+	int tag;
+	int type;
+	int key;
+};
+struct ztype{
+	const char *name;
+	int maxn;
+	int n;
+	struct zfield *f;
+};
+struct zprotocol{
+	int tag;
+	int request;
+	int response;
+};
+struct zproto{
+	struct memery mem;
+	char endian;
+	int pn;
+	struct zprotocol *p;
+	int tn;
+	struct ztype *t;
+};
 typedef int64 integer;
-
-#define _shift16(p) (int16)p[1] | (int16)p[0] << 8
-#define _shift32(p) (int16)p[3] | (int16)p[2] << 8 | (int32)p[1] << 16 | (int32)p[0] << 24
-#define _shift64(p) (int16)p[7] | (int16)p[6] << 8 | (int32)p[5] << 16 | (int32)p[4] << 24 | (int64)p[3] << 32 | (int64)p[2] << 40 | (int64)p[1] << 48 | (int64)p[0] << 56
-int16 shift16(const char* p, bool shift){ return shift ? _shift16(p) : *(int16*)p; }
-int32 shift32(const char* p, bool shift){ return shift ? _shift32(p) : *(int32*)p; }
-int64 shift64(const char* p, bool shift){ return shift ? _shift64(p) : *(int64*)p; }
+int16 shift16(const char* p, bool shift);
+int32 shift32(const char* p, bool shift);
+int64 shift64(const char* p, bool shift);
 
 void zproto_init(struct zproto *thiz);
 void *zproto_alloc(struct zproto *thiz, size_t sz);
 struct zproto *zproto_done(struct zproto *thiz);
 void zproto_free(struct zproto *thiz);
 
-const struct type *zproto_import(const struct zproto *zp, int idx);
-const struct protocol *zproto_findname(const struct zproto *thiz, const char *tyname);
-const struct protocol *zproto_findtag(const struct zproto *thiz, int tag);
+const struct ztype *zproto_import(const struct zproto *zp, int idx);
+const struct zprotocol *zproto_findname(const struct zproto *thiz, const char *tyname);
+const struct zprotocol *zproto_findtag(const struct zproto *thiz, int tag);
 
 #define ZPROTO_CB_MEM		-1
 #define ZPROTO_CB_ERR		-2
 #define ZPROTO_CB_NIL		-3
 struct zproto_arg {
-	const struct field *pf;
+	const struct zfield *pf;
 	void *ud;
 	void *value;
 	int length;
@@ -47,6 +68,6 @@ struct zproto_arg {
 int zproto_pack(const char* data, int size, char *buffer, int len);
 int zproto_unpack(const char *data, int size, char *buffer, int len);
 typedef int(*zproto_cb)(struct zproto_arg *args);
-int zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void *ud);
-int zproto_decode(const struct type *ty, const char *data, int size, bool shift, zproto_cb cb, void *ud);
+int zproto_encode(const struct ztype *ty, char *buffer, int size, zproto_cb cb, void *ud);
+int zproto_decode(const struct ztype *ty, const char *data, int size, bool shift, zproto_cb cb, void *ud);
 #endif
