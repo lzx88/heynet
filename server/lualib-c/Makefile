@@ -26,4 +26,3 @@ zproto.dll : zproto.c zproto_lua.c
 
 clean :
 	rm -f $(LUA_CLIB_PATH)zproto.so zproto.dll
-

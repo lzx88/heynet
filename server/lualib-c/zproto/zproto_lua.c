@@ -581,7 +581,7 @@ pushfunc_withbuffer(lua_State *L, const char *name, lua_CFunction func) {
 }
 
 int
-luaopen_zproto(lua_State *L) {
+luaopen_zproto_core(lua_State *L) {
 #ifdef luaL_checkversion
 	luaL_checkversion(L);
 #endif
