@@ -1,4 +1,4 @@
-local require_db = {
+local require_d = {
 	R = "role_db",
 	B = "bag_db",
 	U = "user_db",
@@ -9,6 +9,7 @@ local mt = {}
 local keys = {}
 
 local moduled = {}
+
 function moduled.register(DB, CMD)
 	local function loopcmd(files, func)
 		table.loop(files, function(fname, mainkey)

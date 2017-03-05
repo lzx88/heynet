@@ -22,7 +22,7 @@ end
 
 local function response(tp, session)
     if session then
-        return function sender(tbl, session)
+        return function(tbl, session)
             return zproto.pack(zproto.encode(tp.response, tbl, tp.tag, session))
         end 
     end
