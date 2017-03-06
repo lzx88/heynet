@@ -3,14 +3,14 @@ local PATH,IP = ...
 IP = IP or "127.0.0.1"
 
 package.path = string.format("%s/client-simple/?.lua;%s/skynet/lualib/?.lua;%s/lualib/?.lua", PATH, PATH, PATH)
-package.cpath = string.format("%s/skynet/luaclib/?.so;%s/client-simple/lsocket/?.so", PATH, PATH)
+package.cpath = string.format("%s/skynet/luaclib/?.so;%s/client-simple/lsocket/?.so;%s/lualib-c/?.so", PATH, PATH, PATH)
 
 local socket = require "simplesocket"
 local message = require "simplemessage"
 
-message.register(string.format("%s/game-proto/*.proto", PATH))
+message.register(string.format("%s/protocol/*.proto", PATH))
 
-message.peer(IP, 5678)
+message.peer(IP, 8001)
 message.connect()
 
 local event = {}
