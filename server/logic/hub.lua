@@ -34,18 +34,12 @@ function new_socket(fd, addr)
 end
 
 function hub.open(ip, port)
-	local n = skynet.getenv("agent_pool_init") or 5
-	skynet.call(service.manager, "lua", "create_agent_pool", n)
-
 	log("Listen %s:%d", ip, port)
 	assert(data.fd == nil, "Already open")
 	data.fd = socket.listen(ip, port)
 	data.ip = ip
 	data.port = port
 	socket.start(data.fd, new_socket)
-
-	local n = skynet.getenv("agent_pool_init") or 5
-	skynet.call(service.manager, "lua", "create_agent_pool", n)
 end
 
 function hub.close()
