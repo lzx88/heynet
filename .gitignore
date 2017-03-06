@@ -1,3 +1,4 @@
 todo
 server/run
 server/cservice
+server/lualib-c/*.so
