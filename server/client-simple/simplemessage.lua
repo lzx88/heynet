@@ -1,4 +1,5 @@
 local socket = require "simplesocket"
+require"util/luaext"
 local msg = require "message"
 
 local message = {}
@@ -25,6 +26,7 @@ function message.bind(obj, handler)
 end
 
 function message.request(name, args)
+	local data, size = msg.request(name, args)
 	socket.write(msg.request(name, args))
 end
 

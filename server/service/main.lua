@@ -18,6 +18,7 @@ skynet.start(function()
 	local gate_port = tonumber(skynet.getenv "gate_port")
 	skynet.call(hub, "lua", "open", "0.0.0.0", gate_port)
 	
-	skynet.error "Server is already start finish!\n"
+	skynet.error "Server is already start finish!"
 	skynet.exit()
 end)
+
