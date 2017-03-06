@@ -16,6 +16,8 @@ function client.dispatch(c)
 			return c
 		end
 		local data, sz = proxy.read(fd)
+		dump(sz)
+		dump(data)
 		local name, args, session, reply = msg.server(data, sz)
 		local f = handler[name]
 		if f then

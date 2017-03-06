@@ -6,7 +6,7 @@ CC=gcc -std=gnu99 -O2
 CFLAGS=-Wall -Wextra $(SYSCFLAGS) $(MYCFLAGS)
 CDEBUG=-g -O0
 SYSCFLAGS=-Wno-int-to-pointer-cast
-MYCFLAGS=-I../skynet/3rd/lua
+MYCFLAGS=-I../../skynet/3rd/lua
 
 # For Linux
 linux:

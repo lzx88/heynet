@@ -8,7 +8,7 @@
 
 #define ENCODE_MINSIZE (2 << 10)
 #define ENCODE_MAXSIZE (16 << 20)
-#define ENCODE_BUFDEC 5//±àÂë»º´æÇøµ÷ÕûËÙ¶È
+#define ENCODE_BUFDEC 5//编码缓冲区 所使用长度比总长小2倍 达到 5 次就缩小一倍
 #define ENCODE_DEEPLEVEL 64
 
 #ifndef luaL_newlib /* using LuaJIT */
@@ -362,7 +362,7 @@ lencode(lua_State *L) {
 	char *buffer = lua_touserdata(L, lua_upvalueindex(1));
 	int size = lua_tointeger(L, lua_upvalueindex(2));
 
-	int rev = size >> 3;//tips: 0pack×î»µÇé¿ö Ã¿16¸ö×Ö½ÚÊ×²¿»áÀ©³ä2¸ö×Ö½Ú encode Í·²¿»áÔ¤Áô size / 8 ¿Õ¼ä ÓÃÓÚ0pack
+	int rev = size >> 3;//tips: 0pack最坏情况每16个字节头部会增加2个字节，预留1/8给0pack
 	char *header = buffer + rev;
 	const int hlen = encode_header(L, header, size - rev);
 	if (hlen < 0)
