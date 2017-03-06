@@ -1,5 +1,5 @@
 root = "$ROOT/"
-serverid = $SERVER_ID
+serverid = 1
 include "conf.server" 
 
 thread = 8
@@ -8,15 +8,15 @@ start = "main"	-- main script
 luaservice = root .. "service/?.lua;" .. root .."skynet/service/?.lua"
 lualoader = root .. "skynet/lualib/loader.lua"
 lua_path = root .. "lualib/?.lua;" .. root .. "skynet/lualib/?.lua;" .. root .. "skynet/lualib/?/init.lua;" .. logic_path
-lua_cpath = root .. "skynet/luaclib/?.so;".. root .."lualib-c/?.so;"
-cpath = root .. "service-c/?.so;"..root.."skynet/cservice/?.so;"
+lua_cpath = root .. "skynet/luaclib/?.so;"
+cpath = root .. "cservice/?.so;"..root.."skynet/cservice/?.so;"
 preload = root .. "lualib/preload.lua" --所有服务启动前都会加载这个脚本
 
 --节点控制中心
 harbor = 0
 --standalone =
 --master = 
---address = "127.0.0.1:"..(serverid * 1000 + harbor)
+--address = "127.0.0.1:"..((10 + harbor) * 1000 + serverid)
 
 if $DAEMON then
 	logger = root .. "run/skynet.log"

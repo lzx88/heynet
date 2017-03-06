@@ -1,7 +1,6 @@
 #!/bin/sh
 export ROOT=$(cd `dirname $0`; pwd)
 export DAEMON=false
-export SERVER_ID=0
 
 while getopts "Dk" arg
 do

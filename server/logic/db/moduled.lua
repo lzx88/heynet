@@ -10,7 +10,7 @@ local keys = {}
 
 local moduled = {}
 
-function moduled.dispatch(DB, CMD)
+function moduled.splitter(DB, CMD)
 	local function loopcmd(files, func)
 		table.loop(files, function(fname, mainkey)
 			local pos = string.match(fname, "()_db$")
@@ -32,8 +32,7 @@ function moduled.dispatch(DB, CMD)
 			return func(DB, ...)
 		end
 	end)
-
-	setmetatable(CMD, __index = mt)
+	setmetatable(CMD, {__index = mt})
 	require_db = nil
 end
 

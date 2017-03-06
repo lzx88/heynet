@@ -1,6 +1,5 @@
 local skynet = require "skynet"
 local client = require "client"
-local game = require "game"
 local log = require "log"
 
 local stage
@@ -37,7 +36,7 @@ function CMD.logout(roleid)
 	log("[%d]%s exit CMD %s", role.id, "玩家x", "xxxx")
 end
 
-game.start {
+require("launcher").start {
 	command = CMD,
 	info = {stage = stage},
 }

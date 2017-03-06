@@ -1,5 +1,4 @@
 local skynet = require "skynet"
-local game = require "game"
 local redis = require "redis"
 local moduled = require "moduled"
 
@@ -16,10 +15,10 @@ local function init()
     }
     DB = redis.connect(conf)
 
-    moduled.dispatch(DB, CMD)
+    moduled.splitter(DB, CMD)
 end
 
-game.start{
+require("launcher").start{
 	command = CMD,
 	init = init,
 }

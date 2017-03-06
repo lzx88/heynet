@@ -1,6 +1,5 @@
 local skynet = require "skynet"
 local service = require "service"
-local game = require "game"
 local client = require "client"
 local log = require "log"
 local role = require "role"
@@ -65,7 +64,7 @@ local function init()
 	client.init(handler)
 end
 
-game.start {
+require("launcher").start {
 	command = CMD,
 	require = {"manager"},
 	info = data,

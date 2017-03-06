@@ -3,18 +3,17 @@ local service = require "service"
 local log = require "log"
 
 local onlines = {}
-local pool = {}
 
-local function provide()
-	local agent = table.remove(pool)
+local pool = {agents = {}}
+function pool.provide()
+	local agent = table.remove(pool.agents)
 	if not agent then
 		agent = skynet.newservice "agent"
 	end
 	return agent
 end
-
-local function recycle(agent)
-	table.insert(pool, agent)
+function pool.recycle(agent)
+	table.insert(pool.agents, agent)
 end
 
 local manager = {}
@@ -23,7 +22,7 @@ function manager.assign(fd, userid, token, loginrole)
 	repeat
 		agent = onlines[userid]
 		if not agent then
-			agent = provide()
+			agent = pool.provide()
 			if not onlines[userid] then
 				-- double check
 				onlines[userid] = agent
@@ -43,12 +42,15 @@ function manager.exit(userid)
 	recycle(agent)
 end
 
-local function init(n)
-	local n = skynet.getenv "agent_pool_init"
+function manager.create_agent_pool(n)
 	for i = 1, n do
 		local agent = skynet.newservice "agent"
-		recycle(agent)
+		pool.recycle(agent)
 	end
+end
+
+local function init()
+
 end
 
 service.init {

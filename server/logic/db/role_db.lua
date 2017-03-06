@@ -1,5 +1,5 @@
 local kHashName = genRedisKey("role", "name")
-local kID = moduled.key("role", "_id")
+local kID = genRedisKey("role", "_id")
 
 local role = {}
 

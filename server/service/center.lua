@@ -1,5 +1,4 @@
 local skynet = require "skynet"
-local game = require "game"
 local log = require "log"
 local modulec = require "modulec"
 local scene_mgr = require "scene_mgr"
@@ -47,7 +46,7 @@ local function init()
 	scene_mgr.init()
 end
 
-game.start{
+require("launcher").start{
 	command = CMD,
 	info = data,
 	init = init,

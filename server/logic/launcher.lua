@@ -3,9 +3,6 @@ local service = require "service"
 
 require "trans"
 
-local game = {}
-local client
-
 function subAgent(addr, roleid)
 	assert(SERVICE_NAME ~= "agent")
 	assert(service.agent[roleid] ~= addr)
@@ -37,17 +34,15 @@ local transfer = {
 	db = {},
 }
 
-function game.start(args)
+local launcher = {}
+
+function launcher.start(args)
 	local init = args.init
 	args.init = function ()
 		local t = transfer[SERVICE_NAME]
 		for _, name in pairs(t) do
 			if name == "client" then
-				if not client then
-					client = require "client"
-					client.proto()
-				end
-				service.push = client.push
+				service.push = require("client").push
 				if SERVICE_NAME ~= "agent" then
 					service.client = {}
 				--else
@@ -67,4 +62,4 @@ function game.start(args)
 	service.init(args)
 end
 
-return game
+return launcher

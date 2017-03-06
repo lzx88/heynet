@@ -1,16 +1,25 @@
-local skynet = require "skynet"
 local core = require "zproto.core"
 
 local zproto = {}
 
+local function loopfile(path, fun, ext)
+    ext = ext and ("*" .. ext) or ""
+    local f = assert(io.popen("ls " .. path .. ext))
+    local fname = f:read("l")
+    while fname do
+        fun(string.match(fname, "%g+"))
+        fname = f:read("l")
+    end
+    io.close(f)
+end
+
 function zproto.load(path)
     local result
-    io.loopfile(path, function(file)
+    loopfile(path, function(file)
         local f = assert(io.open(file), "Can't open protocol file:".. file ..".")
         local text = f:read "*a"
         f:close()
         result = require("zproto_grammar").parse(text, file, result)
-        skynet.error("Load protocol", file)
     end)
     core.save(core.create(result))
 end
