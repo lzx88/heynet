@@ -1,5 +1,5 @@
 root = "$ROOT/"
-serverid = $SERVER_ID
+serverid = 1
 include "conf.server" 
 
 thread = 8
@@ -16,7 +16,7 @@ preload = root .. "lualib/preload.lua" --所有服务启动前都会加载这个
 harbor = 0
 --standalone =
 --master = 
---address = "127.0.0.1:"..(serverid * 1000 + harbor)
+--address = "127.0.0.1:"..((10 + harbor) * 1000 + serverid)
 
 if $DAEMON then
 	logger = root .. "run/skynet.log"

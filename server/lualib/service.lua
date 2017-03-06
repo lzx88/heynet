@@ -26,6 +26,7 @@ function service.init(mod)
 			return mod.info
 		end)
 	end
+
 	skynet.start(function()
 		if mod.require then
 			local r = mod.require

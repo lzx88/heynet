@@ -42,15 +42,14 @@ function manager.exit(userid)
 	recycle(agent)
 end
 
-function manager.create_agent_pool(n)
+local function init(n)
+	local n = skynet.getenv "agent_pool_init"
 	for i = 1, n do
+		dump(i)
 		local agent = skynet.newservice "agent"
+		dump(agent)
 		pool.recycle(agent)
 	end
-end
-
-local function init()
-
 end
 
 service.init {

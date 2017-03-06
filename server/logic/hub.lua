@@ -40,9 +40,6 @@ function hub.open(ip, port)
 	data.ip = ip
 	data.port = port
 	socket.start(data.fd, new_socket)
-
-	local n = skynet.getenv("agent_pool_init") or 5
-	skynet.call(service.manager, "lua", "create_agent_pool", n)
 end
 
 function hub.close()
