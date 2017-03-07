@@ -27,12 +27,12 @@ function client.dispatch(c)
 				elseif type(result) == "number" then
 					proxy.write(fd, msg.pack("error", result, session))
 				else
-					log("Raise error = %s", result)
+					log("@NetMsg Raise error: %s", result)
 				end
 			end)
 		else
 			-- unsupported command, disconnected
-			error ("Invalid command " .. name)
+			error ("Invalid command: " .. name)
 		end
 	end
 end

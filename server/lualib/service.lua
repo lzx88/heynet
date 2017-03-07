@@ -4,19 +4,14 @@ require "errno"
 
 local service = {}
 
-function getResult(ok, e, ...)
+function getResult(cmd, ok, e, ...)
 	if ok then
 		return e, ...
+	elseif type(e) ~= "number" then
+		log(“@RPC call ”..cmd.." raise error: "..e)
+		e = E_SRV_STOP
 	end
-	error(e)--错误抛出
-end
-
-local function setResult(ok, e, ...)
-	if not ok and type(e) ~= "number" then
-		log("Raise error = %s", e)
-		return false, E_SRV_STOP
-	end
-	return ok, e, ...
+	error(e)
 end
 
 function service.init(mod)
@@ -40,23 +35,23 @@ function service.init(mod)
 		skynet.dispatch("lua", function (_,_, cmd, ...)
 			local f = funcs[cmd]
 			if f then
-				skynet.ret(skynet.pack(setResult(pcall(f, ...))))
+				skynet.ret(skynet.pack(pcall(f, ...)))
 			else
-				log("Unknown command : [%s]", cmd)
+				log("Unknown command: [%s]", cmd)
 				skynet.response()(false)
 			end
 		end)
 	end)
 end
 
-function service.call(addr, ...)
-	return getResult(skynet.call(service[addr], "lua", ...))
+function service.call(addr, cmd, ...)
+	return getResult(cmd, skynet.call(service[addr], "lua", cmd, ...))
 end
 
 function service.addTimer(interval, func, args)
 	local ok, e = pcall(func, args)
 	if not ok then
-		log("Raise error:\n%s", e)
+		log("@Timer raise error: %s", e)
 	end
 	skynet.timeout(interval, function()
 		service.addTimer(interval, func, args)
