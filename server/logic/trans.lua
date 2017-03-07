@@ -2,30 +2,30 @@ local skynet = require "skynet"
 local service = require "service"
 
 --内部阻塞RPC
-function callDB( ... )
+function callDB(cmd, ...)
 	assert(SERVICE_NAME ~= "db")
-	return getResult(skynet.call(service.db, "lua", ...))
+	return getResult(cmd, skynet.call(service.db, "lua", cmd, ...))
 end
 
-function callCenter( ... )
+function callCenter(cmd, ...)
 	assert(SERVICE_NAME ~= "center")
-	return getResult(skynet.call(service.center, "lua", ...))
+	return getResult(cmd, skynet.call(service.center, "lua", cmd, ...))
 end
 
-function callAgent(roleid, ...)
+function callAgent(roleid, cmd, ...)
 	assert(SERVICE_NAME ~= "agent")
 	if not service.agent[roleid] then
-		return callCenter("callAgent", roleid, ...)
+		return callCenter("callAgent", roleid, cmd, ...)
 	end
-	return getResult(skynet.call(service.agent[roleid], "lua", ...))
+	return getResult(cmd, skynet.call(service.agent[roleid], "lua", cmd, ...))
 end
 
-function callScene(roleid, ...)
+function callScene(roleid, cmd, ...)
 	if SERVICE_NAME == "agent" then
-		return getResult(skynet.call(service.scene, "lua", roleid, ...))
+		return getResult(cmd, skynet.call(service.scene, "lua", roleid, cmd, ...))
 	end
 	assert(SERVICE_NAME ~= "scene")
-	return getResult(skynet.call(service.scene[roleid], "lua", ...))
+	return getResult(cmd, skynet.call(service.scene[roleid], "lua", cmd, ...))
 end
 
 --内部非阻塞RPC
@@ -37,19 +37,19 @@ function sendScene(roleid, ...)
 	return skynet.send(service.scene[roleid], "lua", ...)
 end
 
-function sendAgent(roleid, ... )
+function sendAgent(roleid, ...)
 	assert(SERVICE_NAME ~= "agent")
 	skynet.send(service.agent[roleid], "lua", ...)
 end
 
-function sendDB( ... )
+function sendDB(...)
 	assert(SERVICE_NAME ~= "db")
-	skynet.send(service.db, "lua", ... )
+	skynet.send(service.db, "lua", ...)
 end
 
-function sendCenter( ... )
+function sendCenter(...)
 	assert(SERVICE_NAME ~= "center")
-	skynet.send(service.center, "lua", ... )
+	skynet.send(service.center, "lua", ...)
 end
 
 --单机推送

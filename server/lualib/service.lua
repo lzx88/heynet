@@ -7,11 +7,20 @@ local service = {}
 function getResult(cmd, ok, e, ...)
 	if ok then
 		return e, ...
-	elseif type(e) ~= "number" then
-		log(“@RPC call ”..cmd.." raise error: "..e)
-		e = E_SRV_STOP
+	elseif e == E_SRV_STOP then
+		log("@RPC call "..cmd.." fail.")
 	end
 	error(e)
+end
+
+local function setResult(ok, e, ...)
+	if ok then
+		return ok, e, ...
+	elseif type(e) ~= "number" then
+		log("@RPC Raise error: "..e)
+		e = E_SRV_STOP
+	end
+	return false, e
 end
 
 function service.init(mod)
@@ -35,7 +44,7 @@ function service.init(mod)
 		skynet.dispatch("lua", function (_,_, cmd, ...)
 			local f = funcs[cmd]
 			if f then
-				skynet.ret(skynet.pack(pcall(f, ...)))
+				skynet.ret(skynet.pack(setResult(pcall(f, ...))))
 			else
 				log("Unknown command: [%s]", cmd)
 				skynet.response()(false)
