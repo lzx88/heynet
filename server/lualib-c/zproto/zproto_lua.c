@@ -544,8 +544,7 @@ lpack(lua_State *L) {
 	void *des = (void*)getbuffer(L, 3, &dlen);
 	int len = zproto_pack(src, slen, des, dlen);
 	lua_pushlstring(L, des, len);
-	lua_pushinteger(L, len);
-	return 2;
+	return 1;
 }
 
 static int
