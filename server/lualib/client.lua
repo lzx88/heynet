@@ -49,6 +49,13 @@ function client.push(fd, t, tbl)
 	proxy.write(fd, msg.pack(t, tbl))
 end
 
+function client.pushdata(fd, args)
+	if not args.data then
+		args.data = msg.pack(args.t, args.tbl)
+	end
+	proxy.write(fd, args.data)
+end
+
 function client.init(cmds)
 	handler = cmds
 end

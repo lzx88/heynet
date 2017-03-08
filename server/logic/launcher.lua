@@ -43,6 +43,7 @@ function launcher.start(args)
 		for _, name in pairs(t) do
 			if name == "client" then
 				service.push = require("client").push
+				service.pushdata = require("client").pushdata
 				if SERVICE_NAME ~= "agent" then
 					service.client = {}
 				--else

@@ -63,8 +63,9 @@ end
 
 function sendClients(roleids, t, data)
 	assert(SERVICE_NAME == "center" or SERVICE_NAME == "scene")
+	local args = {t = t, tbl = data}
 	table.loop(roleids, function(roleid)
-		service.push(service.client[roleid], t, data)
+		service.pushdata(service.client[roleid], t, args)
 	end)
 end
 
@@ -75,9 +76,9 @@ function sendAllClient(t, data, dis)
 		unfd = service.client[dis]
 		service.client[dis] = nil
 	end
-
+	local args = {t = t, tbl = data}
 	table.loop(service.client, function(fd)
-		service.push(fd, t, data)--todo 编码后再发
+		service.pushdata(fd, args)
 	end)
 
 	if unfd then
