@@ -29,7 +29,7 @@ end
 function proxy.subscribe(fd)
 	local addr = map[fd]
 	if not addr then
-	addr = skynet.call(proxyd, "lua", fd)
+		addr = skynet.call(proxyd, "lua", fd)
 		map[fd] = addr
 	end
 end

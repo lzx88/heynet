@@ -1,48 +1,43 @@
 local skynet = require "skynet"
 local service = require "service"
 
---内部阻塞RPC
-function callDB( ... )
+--block RPC
+function callDB(cmd, ...)
 	assert(SERVICE_NAME ~= "db")
-	return getResult(skynet.call(service.db, "lua", ...))
+	return getResult(cmd, skynet.call(service.db, "lua", cmd, ...))
 end
 
-function callCenter( ... )
+function callCenter(cmd, ...)
 	assert(SERVICE_NAME ~= "center")
-	return getResult(skynet.call(service.center, "lua", ...))
+	return getResult(cmd, skynet.call(service.center, "lua", cmd, ...))
 end
 
-function callScene(roleid, ...)
-	assert(SERVICE_NAME ~= "scene" and SERVICE_NAME ~= "agent")
-	return getResult(skynet.call(service.scene[roleid], "lua", ...))
-end
-
-function callAgent(roleid, ...)
+function callAgent(roleid, cmd, ...)
 	assert(SERVICE_NAME ~= "agent")
 	if not service.agent[roleid] then
-		return callCenter("callAgent", roleid, ...)
+		return callCenter("callAgent", roleid, cmd, ...)
 	end
-	return getResult(skynet.call(service.agent[roleid], "lua", ...))
+	return getResult(cmd, skynet.call(service.agent[roleid], "lua", cmd, ...))
 end
 
-function callMyScene( ... )
-	assert(SERVICE_NAME == "agent")
-	return getResult(skynet.call(service.scene, "lua", ...))
+function callScene(roleid, cmd, ...)
+	if SERVICE_NAME == "agent" then
+		return getResult(cmd, skynet.call(service.scene, "lua", roleid, cmd, ...))
+	end
+	assert(SERVICE_NAME ~= "scene")
+	return getResult(cmd, skynet.call(service.scene[roleid], "lua", cmd, ...))
 end
 
-
---内部非阻塞RPC
-function sendMyScene( ... )
-	assert(SERVICE_NAME == "agent")
-	skynet.send(service.scene, "lua", ... )
-end
-
+--no block RPC
 function sendScene(roleid, ...)
-	assert(SERVICE_NAME ~= "scene" and SERVICE_NAME ~= "agent")
-	skynet.send(service.scene[roleid], "lua", ... )
+	if SERVICE_NAME == "agent" then
+		return skynet.send(service.scene, "lua", roleid, ...)
+	end
+	assert(SERVICE_NAME ~= "scene")
+	return skynet.send(service.scene[roleid], "lua", ...)
 end
 
-function sendAgent(roleid, ... )
+function sendAgent(roleid, ...)
 	assert(SERVICE_NAME ~= "agent")
 	skynet.send(service.agent[roleid], "lua", ...)
 end
@@ -57,27 +52,22 @@ function sendCenter( ... )
 	skynet.send(service.center, "lua", ... )
 end
 
-
---单机推送
-function sendMyClient(t, data)
-	assert(SERVICE_NAME == "agent")
-	service.push(service.client, t, data)
-end
-
+--push
 function sendClient(roleid, t, data)
-	assert(SERVICE_NAME ~= "agent")
+	if SERVICE_NAME == "agent" then
+		service.push(service.client, roleid, t)
+	end
+	assert(service.client[roleid])
 	service.push(service.client[roleid], t, data)
 end
 
---多发广播
-function sendMutiClient(roleids, t, data)
+function sendClients(roleids, t, data)
 	assert(SERVICE_NAME == "center" or SERVICE_NAME == "scene")
 	table.loop(roleids, function(roleid)
 		service.push(service.client[roleid], t, data)
 	end)
 end
 
---全服广播 可过滤 dis
 function sendAllClient(t, data, dis)
 	assert(SERVICE_NAME == "center")
 	local unfd
@@ -87,7 +77,7 @@ function sendAllClient(t, data, dis)
 	end
 
 	table.loop(service.client, function(fd)
-		service.push(fd, t, data)
+		service.push(fd, t, data)--todo 编码后再发
 	end)
 
 	if unfd then

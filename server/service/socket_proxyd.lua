@@ -66,6 +66,7 @@ skynet.start(function()
 		end
 	end)
 	skynet.dispatch("lua", function (session, source, fd)
+		dump("lua", fd)
 		assert(type(fd) == "number")
 		local addr = subscribe(fd)
 		if addr then
