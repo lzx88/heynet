@@ -2,7 +2,7 @@ local skynet = require "skynet"
 local log = require "log"
 require "errno"
 
-local rpcHander = function(cmd, ...)
+local rpcHandle = function(cmd, ...)
 	local function result(ok, e, ...)
 		if ok then
 			return true, e, ...
@@ -31,8 +31,8 @@ end
 
 local isdebug = skynet.getenv "debug"
 if isdebug == "true" then
-	rpcHander = nil
-	rpcHander = function (cmd, f, ...) return f(...) end
+	rpcHandle = nil
+	rpcHandle = function (cmd, f, ...) return f(...) end
 	rpcResult = nil
 	rpcResult = function(...) return ... end
 	callTimer = nil
@@ -40,17 +40,6 @@ if isdebug == "true" then
 end
 
 local service = {}
-
-local function setResult(ok, e, ...)
-	if ok then
-		return ok, e, ...
-	elseif type(e) ~= "number" then
-		log("@RPC Raise error: "..e)
-		e = E_SRV_STOP
-	end
-	return false, e
-end
-
 
 function service.init(mod)
 	local funcs = mod.command
@@ -73,7 +62,7 @@ function service.init(mod)
 		skynet.dispatch("lua", function (_,_, cmd, ...)
 			local f = funcs[cmd]
 			if f then
-				skynet.ret(skynet.pack(rpcHander(cmd, f, ...)))
+				skynet.ret(skynet.pack(rpcHandle(cmd, f, ...)))
 			else
 				log("Unknown command: [%s]", cmd)
 				skynet.response()(false)
