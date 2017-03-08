@@ -2,30 +2,30 @@ local skynet = require "skynet"
 local service = require "service"
 
 --block RPC
-function callDB(cmd, ...)
+function callDB(...)
 	assert(SERVICE_NAME ~= "db")
-	return getResult(cmd, skynet.call(service.db, "lua", cmd, ...))
+	return rpcResult(skynet.call(service.db, "lua", ...))
 end
 
-function callCenter(cmd, ...)
+function callCenter(...)
 	assert(SERVICE_NAME ~= "center")
-	return getResult(cmd, skynet.call(service.center, "lua", cmd, ...))
+	return rpcResult(skynet.call(service.center, "lua", ...))
 end
 
-function callAgent(roleid, cmd, ...)
+function callAgent(roleid, ...)
 	assert(SERVICE_NAME ~= "agent")
 	if not service.agent[roleid] then
-		return callCenter("callAgent", roleid, cmd, ...)
+		return callCenter("callAgent", roleid, ...)
 	end
-	return getResult(cmd, skynet.call(service.agent[roleid], "lua", cmd, ...))
+	return rpcResult(skynet.call(service.agent[roleid], "lua", ...))
 end
 
-function callScene(roleid, cmd, ...)
+function callScene(roleid, ...)
 	if SERVICE_NAME == "agent" then
-		return getResult(cmd, skynet.call(service.scene, "lua", roleid, cmd, ...))
+		return rpcResult(skynet.call(service.scene, "lua", roleid, ...))
 	end
 	assert(SERVICE_NAME ~= "scene")
-	return getResult(cmd, skynet.call(service.scene[roleid], "lua", cmd, ...))
+	return rpcResult(skynet.call(service.scene[roleid], "lua", ...))
 end
 
 --no block RPC

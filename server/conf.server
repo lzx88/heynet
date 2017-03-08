@@ -1,8 +1,7 @@
 logic_root = root.."logic/"
 logic_path = logic_root.."?.lua;"..logic_root.."agent/?.lua;"..logic_root.."center/?.lua;"..logic_root.."scene/?.lua;"..logic_root.."db/?.lua;"
 
---agent池默认值
-agent_pool_init = 2
+agent_pool_init = 2--agent pool size
 
 config_path = root .. "config/*.cfg"
 proto_path = root .. "protocol/*.proto"
@@ -13,3 +12,5 @@ debug_port = 7000 + serverid
 redis_host = "127.0.0.1"
 redis_port = 6379
 redis_db = 0
+
+debug = false

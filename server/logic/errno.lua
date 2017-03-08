@@ -22,9 +22,8 @@ E_DB			= E(7, "数据库操作失败")
 E_MSG_TOO_LONG	= E(8, "消息包太长")
 E_NO_PROTO		= E(9, "不存在此协议")
 E_NO_LOGIN		= E(10, "未登录")
-E_SRV_STOP		= E(11, "逻辑错误")
+E_SRV_STOP		= E(11, "功能异常")
 E_BUSY			= E(12, "服务忙")
-E_LOGINED		= E(13, "已登录")
 E_NETWORK		= E(14, "网络异常")
 E_FUNC_CLOSE	= E(15, "功能暂时关闭")
 
@@ -34,6 +33,7 @@ E_USER_NO_EXIST	= E(101, "用户不存在")
 E_ROLE_REPEAT	= E(102, "角色已存在")
 E_ROLE_NO_EXIST	= E(103, "角色不存在")
 E_LEVEL_LIMIT	= E(104, "等级限制")
+E_LOGINED		= E(105, "已登录")
 
 --
 E_NO_ENOUGH		= E(200, "等级限制")
