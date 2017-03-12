@@ -123,8 +123,9 @@ function convert.protocol(all, obj)
     all.struct[result.name] = convert.struct(all, {result.name, field}) 
             
     if result.response then
-        if "table" == type(result.response[1]) then
-            local rsp = convert.struct(all, {result.name ..".response", result.response[1]})
+	local t = type(result.response[1])
+        if "table" == t or "nil" == t then
+            local rsp = convert.struct(all, {result.name ..".response", t == "table" and result.response[1] or {}})
             all.struct[rsp.name] = rsp
             result.response = rsp.name
         else

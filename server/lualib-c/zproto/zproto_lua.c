@@ -492,7 +492,7 @@ ldecode_header(lua_State *L) {
 		return luaL_error(L, "Decode error!");
 	bool shift = *data != ZP->endian;
 	lua_newtable(L);
-	lua_pushinteger(L, shift);
+	lua_pushboolean(L, shift);
 	lua_setfield(L, -2, "shift");
 	lua_pushinteger(L, (uint16)shift16(data + 2, shift));
 	lua_setfield(L, -2, "tag");
