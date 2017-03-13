@@ -1,7 +1,8 @@
 local skynet = require "skynet"
 local service = require "service"
-
 require "trans"
+
+local client
 
 function subAgent(addr, roleid)
 	assert(SERVICE_NAME ~= "agent")
@@ -24,6 +25,7 @@ function subClient(addr, roleid)
 	else
 		service.client[roleid] = addr
 	end
+	client.subcribe(addr)
 end
 
 --各个服务的中转关系
@@ -42,8 +44,9 @@ function launcher.start(args)
 		local t = transfer[SERVICE_NAME]
 		for _, name in pairs(t) do
 			if name == "client" then
-				service.push = require("client").push
-				service.pushdata = require("client").pushdata
+				client = require("client")
+				service.push = client.push
+				service.pushdata = client.pushdata
 				if SERVICE_NAME ~= "agent" then
 					service.client = {}
 				--else
