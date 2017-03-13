@@ -55,7 +55,7 @@ function auth.shakehand(fd)
 end
 
 local function init()
-	client.init(handler)
+	client.init({})
 end
 
 service.init {

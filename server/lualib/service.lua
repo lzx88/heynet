@@ -7,7 +7,7 @@ local rpcHandle = function(cmd, ...)
 		if ok then
 			return true, e, ...
 		elseif type(e) ~= "number" then
-			log("@RPC "..cmd.." raise error: "..e)
+			log("@RPC[%s] raise error: %s ", cmd, e)
 			e = E_SRV_STOP
 		end
 		return false, e

@@ -64,6 +64,6 @@ end
 
 message.request("signin", { userid = "alice", session = 1323 })
 
---[[while true do
-	message.update()
-end]]
+while true do
+--	message.update()
+end

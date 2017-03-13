@@ -3,7 +3,7 @@ local skynet = require "skynet"
 local log = {}
 
 function log.format(fmt, ...)
-	skynet.error(string.format("[".. SERVICE_NAME .."]: ".. fmt, ...))
+	skynet.error(string.format("[%s]: "..fmt, SERVICE_NAME, ...))
 end
 
 function log.__call(self, ...)
@@ -15,3 +15,4 @@ function log.__call(self, ...)
 end
 
 return setmetatable(log, log)
+
