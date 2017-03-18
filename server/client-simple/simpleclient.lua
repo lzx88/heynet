@@ -10,7 +10,7 @@ local message = require "simplemessage"
 
 message.register(string.format("%s/protocol/*.proto", PATH))
 
-message.peer(IP, 8001)
+message.peer(IP, 9001)
 message.connect()
 
 local event = {}
@@ -64,6 +64,6 @@ end
 
 message.request("signin", { userid = "alice", session = 1323 })
 
-while true do
+--while true do
 --	message.update()
-end
+--end

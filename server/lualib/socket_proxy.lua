@@ -39,7 +39,7 @@ function proxy.read(fd)
 	if ok then
 		return msg,sz
 	else
-		error "disconnect"
+		skynet.error("disconnect %d", fd)
 	end
 end
 
