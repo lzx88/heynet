@@ -256,7 +256,7 @@ encode(struct zproto_arg *args) {
 			lua_getfield(L, self->table_index, f->name);
 			if (lua_isnil(L, -1)) {
 				lua_pop(L, 1);
-				return ZPROTO_CB_NIL;
+				return ZCB_NIL;
 			}
 			if (!lua_istable(L, -1))
 				return luaL_error(L, "%s.%s should be a table (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
@@ -271,11 +271,11 @@ encode(struct zproto_arg *args) {
 			if (!lua_next(L, -2)) {
 				lua_pop(L, 1);
 				self->iter_index = 0;
-				return ZPROTO_CB_NIL;// iterate end
+				return ZCB_NIL;// iterate end
 			}
 			if (LUA_TNUMBER == lua_type(L, -2)) {
 				if (16 > args->length)
-					return ZPROTO_CB_MEM;
+					return ZCB_MEM;
 				sz = sprintf(args->value, "\x20%d%s", (int)lua_tointeger(L, -2), "\0") + 1;
 			}
 			else {
@@ -283,14 +283,14 @@ encode(struct zproto_arg *args) {
 				if (NULL == str)
 					return luaL_error(L, "%s.%s should be a map key type (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
 				if (++sz > args->length)
-					return ZPROTO_CB_MEM;
+					return ZCB_MEM;
 				strcpy(args->value, str);
 			}
 			return sz;
 		}
 		if (lua_isnil(L, -1)) {
 			lua_pop(L, 2);
-			return ZPROTO_CB_NIL;
+			return ZCB_NIL;
 		}
 	}
 	if (lua_isnil(L, -1)) {
@@ -318,7 +318,7 @@ encode(struct zproto_arg *args) {
 			return luaL_error(L, "%s.%s is not a string (Is a %s)", self->tyname, f->name, lua_typename(L, lua_type(L, -1)));
 		const char *str = lua_tolstring(L, -1, (size_t*)&sz);
 		if (sz > args->length)
-			return ZPROTO_CB_MEM;
+			return ZCB_MEM;
 		memcpy(args->value, str, sz);
 		lua_pop(L, 1);
 		break;
@@ -344,7 +344,7 @@ encode(struct zproto_arg *args) {
 static int
 encode_header(lua_State *L, char *buffer, int size) {
 	if (size < 8)
-		return ZPROTO_CB_MEM;
+		return ZCB_MEM;
 	*buffer = ZP->endian;
 	*(buffer + 1) = 1;
 	*(uint16*)(buffer + 2) = luaL_checkinteger(L, 3);//tag
@@ -381,7 +381,7 @@ lencode(lua_State *L) {
 		self.iter_index = 0;
 		lua_settop(L, self.table_index);
 		sz = zproto_encode(ty, header + hlen, size - sz, encode, &self);
-		if (sz == ZPROTO_CB_MEM) {
+		if (sz == ZCB_MEM) {
 			buffer = double_buffer(L, &size);
 			rev = size >> 3;
 			memcpy(buffer + rev, header, hlen);

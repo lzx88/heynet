@@ -54,9 +54,9 @@ const struct ztype *zproto_import(const struct zproto *zp, int idx);
 const struct zprotocol *zproto_findname(const struct zproto *thiz, const char *tyname);
 const struct zprotocol *zproto_findtag(const struct zproto *thiz, int tag);
 
-#define ZPROTO_CB_MEM		-1
-#define ZPROTO_CB_ERR		-2
-#define ZPROTO_CB_NIL		-3
+#define ZCB_MEM		-1
+#define ZCB_ERR		-2
+#define ZCB_NIL		-3
 struct zproto_arg {
 	const struct zfield *pf;
 	void *ud;
