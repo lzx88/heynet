@@ -11,13 +11,10 @@ local function msg_rsp(tp, session)
 end
 
 function msg.parse(data, size)
-    local stream, len, header
-    stream, len = zproto.unpack(data, size)
-    local hrqt = zproto.find("header").request
-    header, stream, len = zproto.decode(hrqt, stream, len)
+    local header, stream, len = zproto.decode_header(zproto.unpack(data, size))
     local tp = zproto.find(header.tag)
-    local args = zproto.decode(tp.request, stream, len)
-    return tyname, args, msg_rsp(tp, header.session)
+    local args = zproto.decode(tp.request, stream, len, header.shift)
+    return tp.name, args, msg_rsp(tp, header.session)
 end
 
 function msg.pack(tyname, tbl)

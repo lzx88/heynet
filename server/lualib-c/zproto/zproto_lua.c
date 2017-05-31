@@ -167,22 +167,26 @@ lsave(lua_State *L) {
 static int
 lload(lua_State *L) {
 	struct zproto* zp = ZP;
-	luaL_checktype(L, 1, LUA_TSTRING);
-	int sz;
-	const char *tyname = luaL_tolstring(L, 1, &sz);
-	const struct protocol* p = zproto_query(zp, tyname);
+	const struct protocol* p;
+	int t = lua_type(L, 1);
+	if (t == LUA_TNUMBER)
+		p = zproto_findtag(zp, lua_tointeger(L, 1));
+	else if (t == LUA_TSTRING)
+		p = zproto_findname(zp, luaL_tolstring(L, 1, &t));
+	else
+		return luaL_argerror(L, 1, "Need a string or integer.");
 	if (p == NULL)
-		return luaL_error(L, "Protocol %s not exist!", tyname);
+		return luaL_error(L, "Protocol not exist!");
 	lua_pushinteger(L, p->tag);
-	lua_pushstring(L, tyname);
 	const struct type* request = zproto_import(zp, p->request);
+	lua_pushstring(L, request->name);
 	lua_pushlightuserdata(L, (void*)request);
 	const struct type* response = zproto_import(zp, p->response);
 	if (response)
 		lua_pushlightuserdata(L, (void*)response);
 	else
 		lua_pushnil(L);
-	return 3;
+	return 4;
 }
 
 static int
@@ -341,7 +345,7 @@ encode_header(lua_State *L, char *buffer, int size) {
 		return ZPROTO_CB_MEM;
 	*buffer = ZP->endian;
 	*(buffer + 1) = 1;
-	*(uint16*)(buffer + 2) = luaL_checkinteger(L, 3);//双字节tag
+	*(uint16*)(buffer + 2) = luaL_checkinteger(L, 3);//tag
 	if (lua_type(L, 4) != LUA_TNUMBER)
 		return 4;
 	*(buffer + 1) = 0;
@@ -484,19 +488,23 @@ ldecode_header(lua_State *L) {
 	const void *data = getbuffer(L, 1, &size);
 	if (size < 4)
 		return luaL_error(L, "Decode error!");
-	int n = *(buffer + 1) == 0 ? 8 : 4;
-	lua_pushlightuserdata(L, data + n);
-	lua_pushinteger(L, size - n);
-	bool shift = *buffer != ZP->endian;
+	bool shift = *data != ZP->endian;
+	lua_newtable(L);
 	lua_pushinteger(L, shift);
-	lua_pushinteger(L, (uint16)shift16(buffer + 2, shift));//tag
-	if (n = 8){
+	lua_setfield(L, -2, "shift");
+	lua_pushinteger(L, (uint16)shift16(data + 2, shift));
+	lua_setfield(L, -2, "tag");
+	if (*(data + 1) == 0){
 		if (size < 8)
 			return luaL_error(L, "Decode error!");
-		lua_pushnumber(L, (uint32)shift32(buffer + 4, shift));
-		return 5;
+		data += 4;
+		size -= 4;
+		lua_pushnumber(L, (uint32)shift32(data, shift));//session
+		lua_setfield(L, -2, "session");
 	}
-	return 4;
+	lua_pushlightuserdata(L, data + 4);
+	lua_pushinteger(L, size - 4);
+	return 3;
 }
 
 static int
@@ -506,6 +514,7 @@ ldecode(lua_State *L) {
 		return luaL_argerror(L, 1, "Need a zproto_type object");
 	size_t size;
 	const void *data = getbuffer(L, 2, &size);
+	bool shift = lua_toboolean(L, 4);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
 	if (!lua_istable(L, -1))
 		lua_newtable(L);
@@ -516,7 +525,7 @@ ldecode(lua_State *L) {
 	self.result_index = lua_gettop(L);
 	self.array_index = self.result_index + 1;
 	lua_pushnil(L);
-	int sz = zproto_decode(ty, data, size, false, decode, &self);
+	int sz = zproto_decode(ty, data, size, shift, decode, &self);
 	if (sz > size || sz < 0)
 		return luaL_error(L, "Decode error!");
 	lua_settop(L, self.result_index);

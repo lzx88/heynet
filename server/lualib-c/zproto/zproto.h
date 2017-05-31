@@ -66,7 +66,8 @@ struct zproto *zproto_done(struct zproto *thiz);
 void zproto_free(struct zproto *thiz);
 
 const struct type *zproto_import(const struct zproto *zp, int idx);
-const struct protocol *zproto_query(struct zproto *thiz, const char *tyname);
+const struct protocol *zproto_findname(struct zproto *thiz, const char *tyname);
+const struct protocol *zproto_findtag(struct zproto *thiz, int tag);
 
 #define ZPROTO_CB_MEM		-1
 #define ZPROTO_CB_ERR		-2

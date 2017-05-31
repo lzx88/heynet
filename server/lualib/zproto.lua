@@ -14,12 +14,13 @@ end
 
 local __cache = setmetatable( {} , { __mode = "v"})
 
-function zproto.find(typename)
-    local protocol = __cache[typename]
+function zproto.find(key)
+    local protocol = __cache[key]
     if not protocol then
         protocol = {}
-        protocol.tag, protocol.request, protocol.response = core.load(typename)
-        __cache[typename] = protocol
+        protocol.tag, protocol.name, protocol.request, protocol.response = core.load(key)
+        __cache[protocol.tag] = protocol
+        __cache[protocol.name] = protocol
     end
     return protocol
 end
@@ -28,6 +29,6 @@ zproto.pack = core.pack
 zproto.unpack = core.unpack
 zproto.decode = core.decode
 zproto.encode = core.encode
-
+zproto.decode_header = core.decode_header
 
 return zproto

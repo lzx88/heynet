@@ -130,9 +130,22 @@ const struct type *
 zproto_import(const struct zproto *thiz, int idx) {
 	return 0 <= idx && idx < thiz->tn ? &thiz->t[idx] : NULL;
 }
-
 const struct protocol *
-zproto_query(const struct zproto *thiz, const char *tyname) {
+zproto_findtag(struct zproto *thiz, int tag) {
+	int begin = 0, mid, end = thiz->pn, t;
+	while (begin < end) {
+		mid = (begin + end) / 2;
+		t = thiz->p[mid].tag;
+		if (t == tag)
+			return &thiz->p[mid];
+		if (tag > t)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+}
+const struct protocol *
+zproto_findname(const struct zproto *thiz, const char *tyname) {
 	const struct type *ty;
 	for (int i = 0; i < thiz->pn; ++i) {
 		ty = zproto_import(thiz, thiz->p[i].request);
