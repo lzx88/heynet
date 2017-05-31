@@ -340,12 +340,13 @@ encode_header(lua_State *L, char *buffer, int size) {
 	if (size < 8)
 		return ZPROTO_CB_MEM;
 	*buffer = ZP->endian;
-	size = lua_type(L, 4) == LUA_TNUMBER ? 0 : 1;
-	*(buffer + 1) = size;
+	*(buffer + 1) = 1;
 	*(uint16*)(buffer + 2) = luaL_checkinteger(L, 3);//双字节tag
-	if (size == 0)
-		*(uint32*)(buffer + 4) = lua_tointeger(L, 4);//session
-	return size == 0 ? 8 : 4;
+	if (lua_type(L, 4) != LUA_TNUMBER)
+		return 4;
+	*(buffer + 1) = 0;
+	*(uint32*)(buffer + 4) = lua_tointeger(L, 4);//session
+	return 8;
 }
 
 static int
@@ -478,24 +479,32 @@ decode(const struct zproto_arg *args) {
 }
 
 static int
-decode_header(char *buffer, int size, bool shift) {
+ldecode_header(lua_State *L) {
+	size_t size;
+	const void *data = getbuffer(L, 1, &size);
 	if (size < 4)
-		return ZPROTO_CB_MEM;
-	*buffer = ZP->endian;
-	size = lua_type(L, 4) == LUA_TNUMBER ? 0 : 1;
-	*(buffer + 1) = size;
-	*(uint16*)(buffer + 2) = luaL_checkinteger(L, 3);//双字节tag
-	if (size == 0)
-		*(uint32*)(buffer + 4) = lua_tointeger(L, 4);//session
-	return size == 0 ? 8 : 4;
+		return luaL_error(L, "Decode error!");
+	int n = *(buffer + 1) == 0 ? 8 : 4;
+	lua_pushlightuserdata(L, data + n);
+	lua_pushinteger(L, size - n);
+	bool shift = *buffer != ZP->endian;
+	lua_pushinteger(L, shift);
+	lua_pushinteger(L, (uint16)shift16(buffer + 2, shift));//tag
+	if (n = 8){
+		if (size < 8)
+			return luaL_error(L, "Decode error!");
+		lua_pushnumber(L, (uint32)shift32(buffer + 4, shift));
+		return 5;
+	}
+	return 4;
 }
 
 static int
 ldecode(lua_State *L) {
-	size_t size;
 	const struct type* ty = lua_touserdata(L, 1);
 	if (!ty)
 		return luaL_argerror(L, 1, "Need a zproto_type object");
+	size_t size;
 	const void *data = getbuffer(L, 2, &size);
 	luaL_checkstack(L, ENCODE_DEEPLEVEL * 3 + 8, NULL);
 	if (!lua_istable(L, -1))
@@ -570,6 +579,7 @@ luaopen_zproto(lua_State *L) {
 		{ "save", lsave },
 		{ "load", lload },
 		{ "dump", ldump },
+		{ "decode_header", ldecode_header },
 		{ "decode", ldecode },
 		{ "pack", lpack },
 		{ NULL, NULL },

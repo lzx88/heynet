@@ -371,13 +371,6 @@ zproto_encode(const struct type *ty, char *buffer, int size, zproto_cb cb, void 
 	return data - buffer;
 }
 
-
-#define shift16(p) (int16)p[1] | (int16)p[0] << 8
-#define shift32(p) (int16)p[3] | (int16)p[2] << 8 | (int32)p[1] << 16 | (int32)p[0] << 24
-#define shift64(p) (int16)p[7] | (int16)p[6] << 8 | (int32)p[5] << 16 | (int32)p[4] << 24 | (int64)p[3] << 32 | (int64)p[2] << 40 | (int64)p[1] << 48 | (int64)p[0] << 56
-static int16 decode_int16(const char* p, bool shift){ return shift ? shift16(p) : *(int16*)p; }
-static int32 decode_int32(const char* p, bool shift){ return shift ? shift32(p) : *(int32*)p; }
-static int64 decode_int64(const char* p, bool shift){ return shift ? shift64(p) : *(int64*)p; }
 static int
 decode_key(zproto_cb cb, struct zproto_arg *args, const char **stream, int* size){
 	int n = 1 + strlen(*stream);
@@ -410,7 +403,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 			++args->index;
 			if (f->key == ZK_MAP && decode_key(cb, args, &stream, &sz) < 0)
 				return ZPROTO_CB_MEM;
-			intv = n == 4 ? decode_int32(stream, args->shift) : decode_int64(stream, args->shift);
+			intv = n == 4 ? shift32(stream, args->shift) : shift64(stream, args->shift);
 			args->value = &intv;
 			cb(args);
 		}
@@ -436,7 +429,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 			if (sz < SIZE_HEADER)
 				return ZPROTO_CB_MEM;
 			args->value = (void*)(stream + SIZE_HEADER);
-			args->length = decode_int16(stream, args->shift);
+			args->length = shift16(stream, args->shift);
 			n = args->length + SIZE_HEADER;
 			if (sz < n)
 				return ZPROTO_CB_MEM;
@@ -459,7 +452,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 	if (size < SIZE_HEADER)
 		return ZPROTO_CB_MEM;
 	size -= SIZE_HEADER;
-	fn = decode_int16(data, args.shift);
+	fn = shift16(data, args.shift);
 	sz = fn * SIZE_FIELD;
 	if (size < sz)
 		return ZPROTO_CB_MEM;
@@ -469,7 +462,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 	tag = 0;
 	begin = 0;
 	for (i = 0; i < fn ; ++i) {
-		val = decode_int32(streamf + i * SIZE_FIELD, args.shift);
+		val = shift32(streamf + i * SIZE_FIELD, args.shift);
 		if ((val & 7) == 7) {//tag
 			tag += decode_tag(val);
 			continue;
@@ -495,7 +488,7 @@ zproto_decode(const struct type *ty, const char *data, int size, bool shift, zpr
 				else {//ext
 					if (sz != sizeof(integer))
 						return ZPROTO_CB_ERR;
-					intv = decode_int64(streamd, args.shift);
+					intv = shift64(streamd, args.shift);
 				}
 				args.value = &intv;
 				break;
