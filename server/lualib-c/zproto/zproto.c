@@ -24,7 +24,7 @@ static void *
 pool_alloc(struct memery *m, size_t sz) {
 	if (sz == 0)
 		return NULL;
-	sz = (sz + 3) & ~3;	// align by 4
+	sz = (sz + 3) & ~3;// align by 4
 	m->size += sz;
 	return (char*)m->ptr + m->size - sz;
 }
@@ -55,7 +55,7 @@ void *
 zproto_alloc(struct zproto *thiz, size_t sz){
 	if (sz == 0)
 		return NULL;
-	sz = (sz + 3) & ~3;	// align by 4
+	sz = (sz + 3) & ~3;// align by 4
 	thiz->mem.size += sz;
 	return malloc(sz);
 }
@@ -412,7 +412,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 			if (sz < 1)
 				return ZCB_MEM;
 			args->value = (void*)*stream;
-			cb(args);		
+			cb(args);
 		}
 		break;
 	default:
@@ -429,7 +429,7 @@ decode_array(zproto_cb cb, struct zproto_arg *args, const char* stream, int size
 			n = args->length + SIZE_HEADER;
 			if (sz < n)
 				return ZCB_MEM;
-			cb(args);	
+			cb(args);
 		}
 	}	
 	return size - sz;

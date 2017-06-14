@@ -115,15 +115,7 @@ _add_anchor(AOIPtr thiz, uint16 x, uint16 y){
 
 	}
 
-	OLNodePtr newnode = malloc(sizeof(*newnode));
-	newnode->entitys = NULL;
-	newnode->x = x;
-	newnode->y = iy;
-	newnode->list[Y].[PREV] = *xpnode;
-	newnode->list[Y].[NEXT] = node;
-	if (_is_empty_olhead(*xpnode)){
-		*xpnode->list[Y].[NEXT] = newnode;
-	}
+
 
 	return newnode;
 }
@@ -194,17 +186,15 @@ cb_move(uint32 watcher, uint32 entity){
 	printf("%d watch %d move!", watcher, entity);
 }
 
-void _iter_entity(EntityPtr entity, EntityPtr target, uint16 distance, aoi_cb cb){
+void (_iterquad*)(OLNodePtr origin, EntityPtr entity, aoi_cb cb, uint8 xy, uint8 pn, uint8 xy2, uint8 pn2, _iterquad iter_cb);
+void
+_iter_entity(EntityPtr entity, EntityPtr target, uint16 distance, aoi_cb cb){
 	while (entity){
 		if (entity->radius >= distance)
 			cb(entity->id, target->id);
 		entity = entity->next;
 	}
 }
-
-void
-(_iterquad*)(OLNodePtr origin, EntityPtr entity, aoi_cb cb, uint8 xy, uint8 pn, uint8 xy2, uint8 pn2, _iterquad iter_cb);
-
 void
 _iter_quad(OLNodePtr origin, EntityPtr entity, aoi_cb cb, uint8 xy, uint8 pn, uint8 xy2, uint8 pn2, _iterquad iter_cb){
 	OLNodePtr header = origin;
@@ -220,8 +210,8 @@ _iter_quad(OLNodePtr origin, EntityPtr entity, aoi_cb cb, uint8 xy, uint8 pn, ui
 			iter_cb(header, entity, cb, xy2, pn2, 0, 0, NULL);
 	}
 }
-
-void _iter_watcher(OLNodePtr origin, EntityPtr entity, aoi_cb cb){
+void
+_iter_watcher(OLNodePtr origin, EntityPtr entity, aoi_cb cb){
 	_iter_entity(origin, entity, 0, cb);
 	_iter_quad(origin, entity, cb, X, PREV, Y, PREV, _iter_quad);
 	_iter_quad(origin, entity, cb, Y, PREV, X, NEXT, _iter_quad);
