@@ -8,12 +8,12 @@ local client = {}
 
 local handler
 
-function client.dispatch(c)
-	local fd = c.fd
+function client.dispatch(ctx)
+	local fd = ctx.fd
 	proxy.subscribe(fd)
 	while true do
-		if c.exit then
-			return c
+		if ctx.exit then
+			return ctx
 		end
 		local data, sz = proxy.read(fd)
 		local name, args, session, reply = msg.server(data, sz)
@@ -21,7 +21,7 @@ function client.dispatch(c)
 		if f then
 			-- f may block , so fork and run
 			skynet.fork(function()
-				local ok, result = pcall(f, c, args)
+				local ok, result = pcall(f, ctx, args)
 				if ok then
 					if reply then proxy.write(fd, reply(result)) end
 				elseif type(result) == "number" then

@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <assert.h>
 #include "uitl/types.h"
 #include "uitl/slist.h"
@@ -86,6 +86,18 @@ _is_empty_olhead(AOIPtr thiz, uint8 dir, uint16 i){
 }
 static void
 _insert_olnode(OLNodePtr* xhead, OLNodePtr* yhead, OLNodePtr node){
+	assert(xhead);
+	assert(yhead);
+	OLNodePtr ynode = *xhead;
+	node->list[_Y][_PREV] = NULL;
+	node->list[_Y][_NEXT] = ynode;
+	if (ynode)
+		
+	
+	while (ynode)
+	{
+		ynode = ynode->list[_Y][]
+	}
 
 }
 
@@ -95,14 +107,14 @@ _get_anchor(AOIPtr thiz, uint16 x, uint16 y){
 
 	OLNodePtr target = *xpnode;
 	while (target && target->y < y)
-		target = target->list[_Y].[_NEXT];
+		target = target->list[_Y][_NEXT];
 	if (target && target->y == y)
 		return target;
 
 	OLNodePtr nodey = *xpnode;
 	for (int iy = 0; iy < thiz->header[_Y].size; ++iy){
 		if (nodey && nodey->y == iy){
-			nodey = nodey->list[_Y].[_NEXT];
+			nodey = nodey->list[_Y][_NEXT];
 			continue;
 		}
 		if (!_is_empty_olhead(thiz, _Y, iy)){
@@ -120,7 +132,7 @@ _get_anchor(AOIPtr thiz, uint16 x, uint16 y){
 	OLNodePtr nodex = *ypnode;
 	for (int ix = 0; ix < thiz->header[_X].size; ++ix){
 		if (nodex && nodex->x == ix){
-			nodex = nodex->list[_X].[_NEXT];
+			nodex = nodex->list[_X][_NEXT];
 			continue;
 		}
 		if (!_is_empty_olhead(thiz, _X, ix)){

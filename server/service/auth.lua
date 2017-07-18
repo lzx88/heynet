@@ -50,12 +50,12 @@ function handler:signin(rqt)
 end
 
 function auth.shakehand(fd)
-	local c = client.dispatch({ fd = fd }, handler)
-	return c.userid, c.token, c.loginrole
+	local ctx = client.dispatch({ fd = fd }, handler)
+	return ctx.userid, ctx.token, ctx.loginrole
 end
 
 local function init()
-	client.init({})
+	client.init(handler)
 end
 
 service.init {

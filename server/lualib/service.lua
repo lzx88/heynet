@@ -76,9 +76,15 @@ function service.call(addr, ...)
 end
 
 function service.addTimer(interval, func, args)
-	callTimer(func, args)
 	skynet.timeout(interval, function()
+		callTimer(func, args)
 		service.addTimer(interval, func, args)
+	end)
+end
+
+function service.delay(interval, func, ...)
+	skynet.timeout(interval, function()
+		callTimer(func, ...)
 	end)
 end
 

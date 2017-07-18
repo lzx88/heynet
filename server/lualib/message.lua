@@ -30,12 +30,9 @@ end
 
 function msg.server(data, size)
     local header, stream, len = zproto.decode_header(zproto.unpack(data, size))
-    dump("header", header)
-	dump("stream", stream)
-	dump("size", len)
 	local tp = zproto.find(header.tag)
     local args = zproto.decode(tp.request, stream, len, header.shift)
-    return tp.name, args, header.session, response(tp, header.session) 
+    return tp.name, args, header.session, response(tp, header.session)
 end
 
 function msg.client(data, size)

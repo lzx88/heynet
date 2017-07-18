@@ -3,7 +3,7 @@ local skynet = require "skynet"
 local log = {}
 
 function log.format(fmt, ...)
-	skynet.error(string.format("[%s]: "..fmt, SERVICE_NAME, ...))
+	skynet.error(string.format(fmt, ...))
 end
 
 function log.__call(self, ...)
