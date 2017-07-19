@@ -3,7 +3,11 @@ require "errno"
 
 local wrap = {}
 local isdebug = skynet.getenv "debug"
-if isdebug == "" then
+if isdebug == "ture" then
+	wrap.rpcHandle = function (cmd, f, ...) return f(...) end
+	wrap.rpcResult = function(...) return ... end
+	wrap.callTimer = function(f, args) return f(args) end
+else
 	wrap.rpcHandle = function(cmd, ...)
 					local function result(ok, e, ...)
 						if ok then
@@ -28,10 +32,6 @@ if isdebug == "" then
 						log("@Timer raise error: %s", e)
 					end
 				end
-else
-	wrap.rpcHandle = function (cmd, f, ...) return f(...) end
-	wrap.rpcResult = function(...) return ... end
-	wrap.callTimer = function(f, args) return f(args) end
 end
 
 return wrap
