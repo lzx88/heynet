@@ -4,7 +4,7 @@ require "errno"
 
 local wrap = {}
 local isdebug = skynet.getenv "debug"
-if isdebug == "ture" then
+if isdebug == "true" then
 	wrap.rpcHandle = function (cmd, f, ...) return f(...) end
 	wrap.rpcResult = function(...) return ... end
 	wrap.callTimer = function(f, args) return f(args) end
@@ -14,7 +14,7 @@ else
 						if ok then
 							return true, e, ...
 						elseif type(e) ~= "number" then
-							log("@RPC[%s] raise error: %s ", cmd, e)
+							log("@api.%s raise error: %s", cmd, e)
 							e = E_SRV_STOP
 						end
 						return false, e
@@ -30,7 +30,7 @@ else
 	wrap.callTimer = function( ... )
 					local ok, e = pcall(...)
 					if not ok then
-						log("@Timer raise error: %s", e)
+						log("@timer raise error: %s", e)
 					end
 				end
 end
