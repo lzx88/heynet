@@ -2,7 +2,7 @@ local skynet = require "skynet"
 local actor = require "actor"
 local msg = require "message"
 
-local agents = acotr.partner.agent
+local agents = actor.partner.agent
 local msg_pack = msg.pack
 
 function sendClient(t, data, id)
@@ -30,10 +30,10 @@ function sendAllClient(t, data, dis)
 	end)
 end
 
-local transfer = {}
+local trans = {}
 
 --各个服务的中转关系
-transfer.tbl = {
+trans.tbl = {
 	auth = {"manager", "db"},
 	agent = {"manager", "db", {"scene"}, "center"},
 	center = {"db", {"scene", "agent"}},
@@ -42,4 +42,4 @@ transfer.tbl = {
 	hub = {"auth", "manager"},
 }
 
-return transfer
+return trans

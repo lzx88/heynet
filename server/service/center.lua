@@ -44,7 +44,7 @@ local function init()
 	scene_mgr.init()
 end
 
-actor.start{
+actor.run{
 	command = api,
 	info = center,
 	init = init,

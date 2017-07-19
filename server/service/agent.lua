@@ -6,7 +6,7 @@ local role = require "role"
 
 local api = {}
 local rqt = {}
-local ctx = {}
+local agent = {}
 
 function rqt:ping()
 	assert(self.login)
@@ -15,12 +15,12 @@ end
 
 function rqt:login()
 	assert(not self.login)
-	if ctx.fd then
-		log("login fail %s fd=%d", ctx.userid, self.fd)
+	if agent.fd then
+		log("login fail %s fd=%d", agent.userid, self.fd)
 		return { ok = false }
 	end
-	ctx.fd = self.fd
-	role.online(ctx)
+	agent.fd = self.fd
+	role.online(agent)
 	self.login = true --必须有机制确保登录未完成 客户端不请求
 	
 	actor.addTimer(100, role.timeout)
@@ -31,16 +31,16 @@ local function new_user(fd)
 	local ok, err = pcall(client.dispatch , { fd = fd }, rqt)
 	log("fd=%d is gone. error = %s", fd, err)
 	client.close(fd)
-	if ctx.fd == fd then
-		ctx.fd = nil
+	if agent.fd == fd then
+		agent.fd = nil
 		skynet.sleep(1000)	-- exit after 10s
-		if ctx.fd == nil then
+		if agent.fd == nil then
 			-- double check
-			if not ctx.exit then
-				ctx.exit = true	-- mark exit
+			if not agent.exit then
+				agent.exit = true	-- mark exit
 				role.offline()
-				actor.call("manager", "exit", ctx.userid)
-				ctx = {}
+				actor.call("manager", "exit", agent.userid)
+				agent = {}
 				--skynet.exit()
 			end
 		end
@@ -48,19 +48,19 @@ local function new_user(fd)
 end
 
 function api.assign(fd, userid, token, loginrole)
-	if ctx.exit then
+	if agent.exit then
 		return false
 	end
-	if ctx.userid == nil then
-		ctx.userid = userid
+	if agent.userid == nil then
+		agent.userid = userid
 	end
-	assert(ctx.userid == userid)
+	assert(agent.userid == userid)
 	skynet.fork(new_user, fd)
 	return true
 end
 
 function api.transpond(msg)
-	client.push(ctx.fd, msg)
+	client.push(agent.fd, msg)
 end
 
 local function init()
@@ -70,6 +70,6 @@ end
 
 actor.run{
 	command = api,
-	info = ctx,
+	info = agent,
 	init = init,
 }

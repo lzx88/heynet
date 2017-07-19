@@ -4,7 +4,7 @@ local log = require "log"
 
 local api = {}
 local rqt = {}
-local users = {}
+local auth = {}
 
 local function gettoken()
 	return math.random()
@@ -58,8 +58,8 @@ local function init()
 	
 end
 
-actor.init {
+actor.run{
 	command = api,
 	init = init,
-	info = users,
+	info = auth,
 }
