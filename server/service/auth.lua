@@ -40,13 +40,13 @@ function req:signin(args)
 	end
 	self.session = args.session
 	return
-	local userid, loginrole = actor.call("db", "user.query", args.session)
+	--[[local userid, loginrole = actor.call("db", "user.query", args.session)
 	self.userid = userid
 	self.loginrole = loginrole
 	self.token = gettoken()
 
 	self.exit = true
-	return {token = self.token}
+	return {token = self.token}]]
 end
 
 function api.shakehand(fd)
