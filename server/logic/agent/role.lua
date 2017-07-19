@@ -80,8 +80,8 @@ function role.offline()
 	subClient(nil)
 end
 
-function role.init( client, agent )
-	 modulea.splitter( client, agent )
+function role.init(api, req)
+	 modulea.splitter(api, req)
 end
 
 return role

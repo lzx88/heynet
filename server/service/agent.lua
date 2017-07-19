@@ -5,15 +5,15 @@ local log = require "log"
 local role = require "role"
 
 local api = {}
-local rqt = {}
+local req = {}
 local agent = {}
 
-function rqt:ping()
+function req:ping()
 	assert(self.login)
 	log "ping"
 end
 
-function rqt:login()
+function req:login()
 	assert(not self.login)
 	if agent.fd then
 		log("login fail %s fd=%d", agent.userid, self.fd)
@@ -28,7 +28,7 @@ function rqt:login()
 end
 
 local function new_user(fd)
-	local ok, err = pcall(client.dispatch , { fd = fd }, rqt)
+	local ok, err = pcall(client.dispatch , { fd = fd }, req)
 	log("fd=%d is gone. error = %s", fd, err)
 	client.close(fd)
 	if agent.fd == fd then
@@ -64,7 +64,7 @@ function api.transpond(msg)
 end
 
 local function init()
-	role.init(rqt, api)
+	role.init(api, req)
 	actor.sendClient = api.transpond
 end
 

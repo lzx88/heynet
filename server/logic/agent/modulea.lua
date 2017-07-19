@@ -50,24 +50,24 @@ function modulea.anti( func_mod )
 	end
 end
 
-function modulea.splitter( client, agent )
+function modulea.splitter(api, req)
 	table.loop(hlist, function( func, cmd )
-		assert(not client[cmd], "Ctrl proto:".. cmd .. " client aready exist")
+		assert(not req[cmd], "Ctrl proto:".. cmd .. " req aready exist")
 		hlist[cmd] = function (_, ... )
 			func( ... )
 		end
 	end)
-	setmetatable(client, {__index = hlist})
+	setmetatable(req, {__index = hlist})
 	hlist = nil
 
 	local mt = {}
 	table.loop(mlist, function( impl, name )
-		assert(not agent[name], "Impl module:".. name .. " agent aready exist")
+		assert(not api[name], "Impl module:".. name .. " api aready exist")
 		table.loop(impl, function( func, k )
 			mt[name..'.'..k] = func
 		end)
 	end)
-	setmetatable(agent, {__index = mt})
+	setmetatable(api, {__index = mt})
 	mlist = nil
 end
 
