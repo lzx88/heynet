@@ -22,6 +22,7 @@ local function hook(tbl)
 			end
 		end
 	end
+	assert(not partner[SERVICE_NAME], "Can’t redirect self!")
 end
 
 function actor.run(options)

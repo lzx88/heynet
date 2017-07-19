@@ -6,14 +6,10 @@ local log = require "log"
 
 local client = {}
 
-local handler
-
 function client.dispatch(ctx, consumer)
 	local fd = ctx.fd
+	local handler = consumer
 	proxy.subscribe(fd)
-	if not handler then
-		handler = consumer
-	end
 	while true do
 		if ctx.exit then
 			return ctx
@@ -38,10 +34,6 @@ function client.dispatch(ctx, consumer)
 			error ("Invalid command: " .. name)
 		end
 	end
-end
-
-function client.subscribe(fd)
-	proxy.subscribe(fd)
 end
 
 function client.close(fd)
