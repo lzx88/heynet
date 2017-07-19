@@ -1,9 +1,9 @@
-local skynet = require "skynet"
+local actor = require "actor"
 local log = require "log"
 local modulec = require "modulec"
 local scene_mgr = require "scene_mgr"
 
-local data = {
+local center = {
 	scenes = {},
 	roles = {},
 }
@@ -15,12 +15,11 @@ local function onlogout()
 	-- body
 end
 
-local CMD = {}
-function CMD.login(role, agent, fd)
+local api = {}
+function api.login(role, agent)
 	log("Role[%d] %s login", role.id, role.name)
-	subAgent(agent, role.id)
-	subClient(fd, role.id)
-	data.roles[role.id] = role
+	actor.hook("agent", agent, role.id)
+	center.roles[role.id] = role
 	onlogin()
 	modulec.loop(function(mgr)
 		if mgr.onlogin then
@@ -30,24 +29,23 @@ function CMD.login(role, agent, fd)
 	return scene_mgr.get_scene_addr(role.mapid)
 end
 
-function CMD.logout(roleid)
+function api.logout(roleid)
 	modulec.loop(function(mgr)
 		if mgr.onlogout then
 			mgr.onlogout()
 		end
 	end)
 	onlogout()
-	subAgent(nil, roleid)
-	subClient(nil, roleid)
-	data.roles[roleid] = nil
+	actor.hook("agent", nil, role.id)
+	center.roles[roleid] = nil
 end
 
 local function init()
 	scene_mgr.init()
 end
 
-require("launcher").start{
-	command = CMD,
-	info = data,
+actor.start{
+	command = api,
+	info = center,
 	init = init,
 }

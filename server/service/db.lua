@@ -1,11 +1,12 @@
 local skynet = require "skynet"
+local actor = require "actor"
 local redis = require "redis"
 local moduled = require "moduled"
 
 local conf
 local DB
 
-local CMD = {}
+local api = {}
 local function init()
 	conf = {
 		host = skynet.getenv "redis_host",
@@ -13,12 +14,12 @@ local function init()
 		db = skynet.getenv "redis_db",
         auth,
     }
-    DB = redis.connect(conf)
+    --DB = redis.connect(conf)
 
-    moduled.splitter(DB, CMD)
+    --moduled.splitter(DB, CMD)
 end
 
-require("launcher").start{
-	command = CMD,
+actor.run{
+	command = api,
 	init = init,
 }

@@ -8,9 +8,12 @@ local client = {}
 
 local handler
 
-function client.dispatch(ctx)
+function client.dispatch(ctx, consumer)
 	local fd = ctx.fd
 	proxy.subscribe(fd)
+	if not handler then
+		handler = consumer
+	end
 	while true do
 		if ctx.exit then
 			return ctx
@@ -45,19 +48,8 @@ function client.close(fd)
 	proxy.close(fd)
 end
 
-function client.push(fd, t, tbl)
-	proxy.write(fd, msg.pack(t, tbl))
-end
-
-function client.pushdata(fd, args)
-	if not args.data then
-		args.data = msg.pack(args.t, args.tbl)
-	end
-	proxy.write(fd, args.data)
-end
-
-function client.init(cmds)
-	handler = cmds
+function client.push(fd, data)
+	proxy.write(fd, data)
 end
 
 return client

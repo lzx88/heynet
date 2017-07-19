@@ -1,5 +1,5 @@
 local skynet = require "skynet"
-local service = require "service"
+local actor = require "actor"
 local log = require "log"
 
 local onlines = {}
@@ -53,8 +53,8 @@ local function init()
 
 end
 
-service.init {
+actor.run{
 	init = init,
 	command = manager,
-	data = onlines,
+	info = onlines,
 }
