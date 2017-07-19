@@ -29,6 +29,8 @@ local function response(tp, session)
 end
 
 function msg.server(data, size)
+    dump("dt",data)
+    dump(size)
     local header, stream, len = zproto.decode_header(zproto.unpack(data, size))
 	local tp = zproto.find(header.tag)
     local args = zproto.decode(tp.request, stream, len, header.shift)
