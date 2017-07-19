@@ -16,7 +16,7 @@ local function hook(tbl)
 			else
 				for _, nm in pairs(name) do
 					actor.partner[nm] = {}
-				end)
+				end
 			end
 		end
 	end
