@@ -2,10 +2,7 @@ local skynet = require "skynet"
 local wrap = require "err_wrapper"
 
 local actor = { partner = {} }
-
---------------------------------------------------------
-
-----------------------------------------------------------
+local partner = actor.partner
 
 
 local rpcHandle = wrap.rpcHandle
@@ -16,10 +13,10 @@ local function hook(tbl)
 	if tbl then
 		for _, name in pairs(tbl) do
 			if type(name) ~= "table" then
-				actor.partner[name] = skynet.uniqueservice(name)
+				partner[name] = skynet.uniqueservice(name)
 			else
 				for _, nm in pairs(name) do
-					actor.partner[nm] = {}
+					partner[nm] = {}
 				end
 			end
 		end
@@ -52,16 +49,16 @@ function actor.run(options)
 end
 
 function actor.hook(name, addr, key)
-	if type(actor.partner[name]) == "table" then
-		actor.partner[name][key] = addr
+	if type(partner[name]) == "table" then
+		partner[name][key] = addr
 	else
-		actor.partner[name] = addr
+		partner[name] = addr
 	end
-	assert(not actor.partner[SERVICE_NAME], "Can’t redirect self!")
+	assert(not partner[SERVICE_NAME], "Can’t redirect self!")
 end
 
 function actor.call(addr, ...)
-	return rpcResult(skynet.call(actor[addr], "lua", ...))
+	return rpcResult(skynet.call(partner[addr], "lua", ...))
 end
 
 function actor.addTimer(ms, func, args)
