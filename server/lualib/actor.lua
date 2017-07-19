@@ -2,11 +2,42 @@ local skynet = require "skynet"
 local wrap = require "err_wrapper"
 local trans = require "trans"
 
+local actor = { partner = {} }
+
+--------------------------------------------------------
+local agents = acotr.partner.agent
+local msg_pack = msg.pack
+
+function sendClient(t, data, id)
+	local p = msg_pack(t, data)
+	if actor.sendClient then
+		actor.sendClient(p)
+	else
+		acotr.send(agents[id], "transpond", p)
+	end
+end
+
+function sendClients(ids, t, data)
+	local p = msg_pack(t, data)
+	table.loop(ids, function(id)
+		acotr.send(agents[id], "transpond", p)
+	end)
+end
+
+function sendAllClient(t, data, dis)
+	local p = msg_pack(t, data)
+	table.loop(agents, function(addr, id)
+		if id ~= dis then
+			acotr.send(addr, "transpond", p)
+		end
+	end)
+end
+----------------------------------------------------------
+
+
 local rpcHandle = wrap.rpcHandle
 local rpcResult = wrap.rpcResult
 local callTimer = wrap.callTimer
-
-local actor = { partner = {} }
 
 local function hook(tbl)
 	if tbl then
