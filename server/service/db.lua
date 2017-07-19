@@ -12,11 +12,11 @@ local function init()
 		host = skynet.getenv "redis_host",
 		port = skynet.getenv "redis_port",
 		db = skynet.getenv "redis_db",
-        auth,
+        auth = skynet.getenv "redis_auth",
     }
-    --DB = redis.connect(conf)
+    DB = redis.connect(conf)
 
-    --moduled.splitter(DB, CMD)
+    moduled.splitter(DB, api)
 end
 
 actor.run{
