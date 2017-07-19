@@ -1,9 +1,9 @@
 local actor = require "actor"
 local log = require "log"
 
-local scene
-
-local CMD = {}
+local stage
+local scene = {}
+local api = {}
 
 local function iscopy(id)
 	return id >= 10000
@@ -15,21 +15,21 @@ end
 
 function api.load(id)
 	if iscopy(id) then
-		scene = require "stage/copy"
+		stage = require "stage/copy"
 	elseif iscity(id) then
-		scene = require "stage/city"
+		stage = require "stage/city"
 	end
-	scene.load(id)
+	stage.load(id)
 	log("load api %s", id)
 end
 
 function api.login(role)
 	log("Role[%d] %s login", role.id, role.name)
-	scene.enter(role)
+	stage.enter(role)
 end
 
 function api.logout(roleid)
-	scene.exit(roleid)
+	stage.exit(roleid)
 	log("[%d]%s exit api %s", role.id, "玩家x", "xxxx")
 end
 
