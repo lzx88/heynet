@@ -62,7 +62,7 @@ function event:push(args)
 	print("server push", args.text)
 end
 
-message.request("signin", { userid = "alice", session = 1323 })
+message.request("signin", { name = "alice", session = 1323 })
 
 --while true do
 --	message.update()

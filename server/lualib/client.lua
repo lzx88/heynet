@@ -26,7 +26,7 @@ function client.dispatch(ctx, consumer)
 				elseif type(result) == "number" then
 					proxy.write(fd, msg.pack("error", result, session))
 				else
-					log("Raise error @req.%s: %s", name, result)
+					log("REQ.%s raise error: %s", name, result)
 				end
 			end)
 		else

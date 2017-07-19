@@ -14,7 +14,7 @@ else
 						if ok then
 							return true, e, ...
 						elseif type(e) ~= "number" then
-							log("Raise error @api.%s: %s", cmd, e)
+							log("API.%s  raise error: %s", cmd, e)
 							e = E_SRV_STOP
 						end
 						return false, e
@@ -30,7 +30,7 @@ else
 	wrap.callTimer = function( ... )
 					local ok, e = pcall(...)
 					if not ok then
-						log("Raise error @timer: %s", e)
+						log("TIMER raise error: %s", e)
 					end
 				end
 end

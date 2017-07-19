@@ -18,7 +18,7 @@
 4 = create_role {}
 
 5 = signin {
-	string userid = 1
+	string name = 1
 	number session = 2
 	#{}
 }

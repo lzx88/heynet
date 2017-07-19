@@ -52,9 +52,6 @@ end
 
 function user.query(DB, session)
 	local userid = DB:hget(kHashSession, session)
-dump(kHashSession)
-dump(session)
-dump(userid)
 	if not userid then
 		error(E_USER_NO_EXIST)
 	end
