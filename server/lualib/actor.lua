@@ -1,5 +1,6 @@
 local skynet = require "skynet"
 local wrap = require "err_wrapper"
+local log = require "log"
 
 local actor = { partner = {} }
 local partner = actor.partner
