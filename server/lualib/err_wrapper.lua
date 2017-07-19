@@ -1,4 +1,5 @@
 local skynet = require "skynet"
+local log = require "log"
 require "errno"
 
 local wrap = {}
