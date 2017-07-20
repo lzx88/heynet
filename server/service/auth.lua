@@ -39,7 +39,7 @@ function req:signin(args)
 		error(E_ILL_OPR)
 	end
 	self.session = args.session
-	return
+	return {}
 	--[[local userid, loginrole = actor.call("db", "user.query", args.session)
 	self.userid = userid
 	self.loginrole = loginrole

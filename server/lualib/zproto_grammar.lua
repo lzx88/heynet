@@ -40,14 +40,14 @@ local function namedpat(name, pat) return Ct(Cg(lpeg.Cc(name), "type") * pat) en
 local function multipat(pat) return Ct(pat^0 * (newline * pat)^0) end
 local fnamepat = ((P(1) - (P"/" + "\\"))^0 * (P"/" + "\\")^1)^0 * C(word) * (P"." * (alpha + alnum)^0)^0
 
-local protocol = P {
+local protocol = P{
     "ALL",
     ALL = multipat(V"STRUCT" + V"PROTOCOL"),
     STRUCT = namedpat("struct", name * custompat(multipat(V"FIELD" + V"STRUCT"))),
     PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(typename) * V"PROTO"),
-    PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
-    RESPONSE = namedpat("response", P"#" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
-    FIELD = namedpat("field", typename * blanks * name * (C"[]" + C"{}")^-1 * blankpat"=" * tag),
+    PROTO = custompat(multipat(V"FIELD") * multipat(V"RESPONSE")),
+    RESPONSE = namedpat("response", protoid * blankpat"=" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
+    FIELD = namedpat("field", typename * blanks * name * C"[]"^-1 * blankpat"=" * tag),
 }
 local protofile = dummy * protocol * dummy * eof
 
@@ -73,14 +73,9 @@ local function checktype(all, ptype, t)
 end
 local convert = {}
 function convert.field(all, repeats, p, typename)
-    local f = { type = p[1], name = p[2], tag = p[3], key = 0}
+    local f = { type = p[1], name = p[2], tag = p[3]}
     if p[4] then
-        f.tag = p[4]
-        if p[3] == "[]" then
-            f.key = 1
-        elseif p[3] == "{}" then
-            f.key = 2
-        end
+        f.tag = -p[4]
     end
     f.name = checkname(f.name)
     assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name ..".")
@@ -111,27 +106,26 @@ function convert.struct(all, obj)
     return result
 end
 function convert.protocol(all, obj)
-    local result = {tag = obj[1], name = checkname(obj[2]), response = obj[4]}
-    local field = {}
-    if obj[3] then
-        if obj[3].type == "response" then
-            result.response = obj[3]
-        elseif obj[3].type == nil then
-            field = obj[3]
-        end
-    end
+    local result = {tag = obj[1], name = checkname(obj[2])}
+    local field = obj[3] or {}
     all.struct[result.name] = convert.struct(all, {result.name, field}) 
             
-    if result.response then
-	local t = type(result.response[1])
-        if "table" == t or "nil" == t then
-            local rsp = convert.struct(all, {result.name ..".response", t == "table" and result.response[1] or {}})
-            all.struct[rsp.name] = rsp
-            result.response = rsp.name
-        else
-            result.response = result.response[1]
-            if result.response then
-                assert(all.struct[result.response], "Undefined type:"..result.response.." in protocol:".. result.name..".")
+    if obj[4] then
+        result.response = {}
+        for _,r in pairs(obj[4]) do
+            local k = r[1]
+            local fiel = r[2]
+            assert(not result.response[k], "Redefined response no."..k.." in protocol:".. result.name..".")
+
+            if "table" == type(fiel) or "nil" == type(fiel) then
+                local rsp = convert.struct(all, {result.name.."."..k, fiel or {}})
+                all.struct[rsp.name] = rsp
+                result.response[k] = rsp.name
+            else
+                result.response[k] = fiel
+                if fiel then
+                    assert(all.struct[fiel], "Undefined type:"..fiel.." in protocol:".. result.name..".")
+                end
             end
         end
     end
@@ -158,7 +152,6 @@ local function adjust(r)
 end
 
 local function link(all, result)
-    if not result.protoname then result.protoname = {} end
     local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
@@ -188,16 +181,17 @@ local function link(all, result)
     local tmp = {}
     for _,p in pairs(all.protocol) do
         local pname = all.struct[p.request].name
-        assert(not result.protoname[pname], "Redefined protocol name:" .. pname .. ".")
-        result.protoname[pname] = true
-        p.request = gentypetag(p.request, tmp)
+        assert(not result.names[pname], "Redefined protocol name:" .. pname .. ".")
+        result.names[pname] = true
+        local rp = {tag = p.tag, msg = {}}
+        rp.msg[1] = gentypetag(p.request, tmp)
         if p.response then
-            assert(type(p.response) == "string")
-            p.response = gentypetag(p.response, tmp)
-        else
-            p.response = -1
+            assert(type(p.response) == "table")
+            for k,rspname in pairs(p.response) do
+                rp.msg[k+2] = gentypetag(rspname, tmp)
+            end
         end
-        table.insert(result.P, p)
+        table.insert(result.P, rp)
     end
     table.sort(result.P, function(a, b)
         return a.tag < b.tag
@@ -224,8 +218,6 @@ local function link(all, result)
         end)
         t.field = fs
     end
-    all = nil
-    return result
 end
 
 --[[
@@ -238,15 +230,19 @@ The protocol of zproto
 --6.支持--单行注释
 ]]
 
-local grammar = {}
-
-function grammar.parse(text, path, result)
-    if not result then result = { T = {}, P = {} } end
-    local state = {file = path, pos = 0, line = 1}
-    local r = lpeg.match(protofile + exception, text, 1, state)
-    result.fname = fnamepat:match(path)
-    return link(adjust(r), result)
+local function parser()
+    local result = {T={},P={},names={}}
+    return function(text, path)
+        local state = {file = path, pos = 0, line = 1}
+        local ldata = lpeg.match(protofile + exception, text, 1, state)
+        local pdata = adjust(ldata)
+        --dump(pdata)
+        link(pdata, result)
+        return result
+    end
 end
+
+local grammar = {parser = parser()}
 
 return grammar
 

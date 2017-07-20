@@ -1,5 +1,5 @@
 local skynet = require "skynet"
-local wrap = require "err_wrapper"
+local wrap = require "func_wrapper"
 local log = require "log"
 
 local actor = { partner = {} }
@@ -38,7 +38,7 @@ function actor.run(options)
 		if options.init then
 			options.init()
 		end
-		skynet.dispatch("lua", function (_,_, cmd, ...)
+		skynet.dispatch("lua", function (_,_,cmd,...)
 			local f = api[cmd]
 			if f then
 				skynet.ret(skynet.pack(rpcHandle(cmd, f, ...)))
