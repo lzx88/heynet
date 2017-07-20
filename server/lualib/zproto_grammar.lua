@@ -151,7 +151,7 @@ local function adjust(r)
     return all
 end
 
-local function link(all, result)
+local function link(all, result, _names)
     local taginc = #result.T
     local function gentypetag(t, T)
         if buildin[t] then
@@ -181,8 +181,8 @@ local function link(all, result)
     local tmp = {}
     for _,p in pairs(all.protocol) do
         local pname = all.struct[p.request].name
-        assert(not result.names[pname], "Redefined protocol name:" .. pname .. ".")
-        result.names[pname] = true
+        assert(not _names[pname], "Redefined protocol name:" .. pname .. ".")
+        _names[pname] = true
         local rp = {tag = p.tag, msg = {}}
         rp.msg[1] = gentypetag(p.request, tmp)
         if p.response then
@@ -191,7 +191,7 @@ local function link(all, result)
                 rp.msg[k+2] = gentypetag(rspname, tmp)
             end
         end
-        table.insert(result.P, rp)
+        table.insert(result.P, rp) 
     end
     table.sort(result.P, function(a, b)
         return a.tag < b.tag
@@ -223,7 +223,7 @@ end
 --[[
 The protocol of zproto
 --1.字段tag从1开始，协议号 可以从0开始
---2.字段名加[] 表示数组 而 加{} 表示map
+--2.字段名加[] 表示数组
 --3.协议中， 不允许内嵌自定义类型，如果有 #的字段则表示返回包
 --4.内建关键字为 number, string, bool 不允许作为 字段name
 --5.自定义类型可以内嵌自定义类型
@@ -231,18 +231,16 @@ The protocol of zproto
 ]]
 
 local function parser()
-    local result = {T={},P={},names={}}
+    local result = {T={},P={}}
+    local _names = {}
     return function(text, path)
         local state = {file = path, pos = 0, line = 1}
         local ldata = lpeg.match(protofile + exception, text, 1, state)
         local pdata = adjust(ldata)
-        --dump(pdata)
-        link(pdata, result)
+        link(pdata, result, _names)
         return result
     end
 end
 
-local grammar = {parser = parser()}
-
-return grammar
+return parser()
 

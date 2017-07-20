@@ -9,6 +9,7 @@ xx {
 	ss {}
 }
 
-1 = signin {
-	xx session[] = 2	
+2 = ccc {
+	string name = 1
+	xx ff = 2
 }
