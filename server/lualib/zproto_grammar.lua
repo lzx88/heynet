@@ -27,7 +27,7 @@ local blanks = S" \t"^1
 local alpha = R"az" + R"AZ" + "_"
 local word = alpha * (alpha + alnum)^0
 local name = C(word)
-local typename = C(word * ("." * word)^0)
+local typename = C(word * (P"." + alpha + alnum)^0)
 local tag = P"0"^0 * R"19"^1 * R"09"^0 / tonumber
 local protoid = R"09"^1 / tonumber
 local lineend = lpeg.Cmt((P"\n" + "\r\n") * lpeg.Carg(1), count_lines)
@@ -45,8 +45,8 @@ local protocol = P{
     ALL = multipat(V"STRUCT" + V"PROTOCOL"),
     STRUCT = namedpat("struct", name * custompat(multipat(V"FIELD" + V"STRUCT"))),
     PROTOCOL = namedpat("protocol", protoid * blankpat"=" * blankpat(typename) * V"PROTO"),
-    PROTO = custompat(multipat(V"FIELD") * multipat(V"RESPONSE")),
-    RESPONSE = namedpat("response", protoid * blankpat"=" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
+    PROTO = custompat(V"RESPONSE" + multipat(V"FIELD") * (newline * V"RESPONSE")^-1),
+    RESPONSE = namedpat("response", P">>" * (custompat(multipat(V"FIELD")) + blankpat(typename))),
     FIELD = namedpat("field", typename * blanks * name * C"[]"^-1 * blankpat"=" * tag),
 }
 local protofile = dummy * protocol * dummy * eof
@@ -73,9 +73,10 @@ local function checktype(all, ptype, t)
 end
 local convert = {}
 function convert.field(all, repeats, p, typename)
-    local f = { type = p[1], name = p[2], tag = p[3]}
+    local f = { type = p[1], name = p[2], tag = p[3], key = 0}
     if p[4] then
-        f.tag = -p[4]
+        f.tag = p[4]
+        if p[3] == "[]" then f.key = 1 end
     end
     f.name = checkname(f.name)
     assert(not repeats[f.tag], "Redefined tag in type:".. typename ..".".. f.name ..".")
@@ -106,26 +107,27 @@ function convert.struct(all, obj)
     return result
 end
 function convert.protocol(all, obj)
-    local result = {tag = obj[1], name = checkname(obj[2])}
-    local field = obj[3] or {}
+    local result = {tag = obj[1], name = checkname(obj[2]), response = obj[4]}
+    local field = {}
+    if obj[3] then
+        if obj[3].type == "response" then
+            result.response = obj[3]
+        elseif obj[3].type == nil then
+            field = obj[3]
+        end
+    end
     all.struct[result.name] = convert.struct(all, {result.name, field}) 
-            
-    if obj[4] then
-        result.response = {}
-        for _,r in pairs(obj[4]) do
-            local k = r[1]
-            local fiel = r[2]
-            assert(not result.response[k], "Redefined response no."..k.." in protocol:".. result.name..".")
 
-            if "table" == type(fiel) or "nil" == type(fiel) then
-                local rsp = convert.struct(all, {result.name.."."..k, fiel or {}})
-                all.struct[rsp.name] = rsp
-                result.response[k] = rsp.name
-            else
-                result.response[k] = fiel
-                if fiel then
-                    assert(all.struct[fiel], "Undefined type:"..fiel.." in protocol:".. result.name..".")
-                end
+    if result.response then
+        local t = type(result.response[1])
+        if "table" == t or "nil" == t then
+            local rsp = convert.struct(all, {result.name ..".response", t == "table" and result.response[1] or {}})
+            all.struct[rsp.name] = rsp
+            result.response = rsp.name
+        else
+            result.response = result.response[1]
+            if result.response then
+                assert(all.struct[result.response], "Undefined type:"..result.response.." in protocol:".. result.name..".")
             end
         end
     end
@@ -152,7 +154,7 @@ local function adjust(r)
 end
 
 local function link(all, result, _names)
-    local taginc = #result.T
+    local taginc = result.T[0] and #result.T + 1 or #result.T
     local function gentypetag(t, T)
         if buildin[t] then
             return buildin[t]
@@ -161,7 +163,7 @@ local function link(all, result, _names)
             if not all.struct[t].tag then
                 all.struct[t].tag = taginc
                 T[taginc] = all.struct[t]
-                taginc = taginc + 1
+                taginc = taginc + 1       
             end
             return all.struct[t].tag
         end
@@ -171,8 +173,8 @@ local function link(all, result, _names)
             return
         end
         if not buildin[f.type] then
-            for _,f in pairs(all.struct[f.type].field) do
-                linkfield(f, T)
+            for _,f2 in pairs(all.struct[f.type].field) do
+                linkfield(f2, T)
             end
         end
         f.type = gentypetag(f.type, T)
@@ -183,15 +185,14 @@ local function link(all, result, _names)
         local pname = all.struct[p.request].name
         assert(not _names[pname], "Redefined protocol name:" .. pname .. ".")
         _names[pname] = true
-        local rp = {tag = p.tag, msg = {}}
-        rp.msg[1] = gentypetag(p.request, tmp)
+        p.request = gentypetag(p.request, tmp)
         if p.response then
-            assert(type(p.response) == "table")
-            for k,rspname in pairs(p.response) do
-                rp.msg[k+2] = gentypetag(rspname, tmp)
-            end
+            assert(type(p.response) == "string")
+            p.response = gentypetag(p.response, tmp)
+        else
+            p.response = -1
         end
-        table.insert(result.P, rp) 
+        table.insert(result.P, p)
     end
     table.sort(result.P, function(a, b)
         return a.tag < b.tag
@@ -222,25 +223,32 @@ end
 
 --[[
 The protocol of zproto
---1.字段tag从1开始，协议号 可以从0开始
---2.字段名加[] 表示数组
---3.协议中， 不允许内嵌自定义类型，如果有 #的字段则表示返回包
---4.内建关键字为 number, string, bool 不允许作为 字段name
---5.自定义类型可以内嵌自定义类型
---6.支持--单行注释
+1.字段tag从1开始，协议号 可以从0开始
+2.字段名加[] 表示数组
+3.协议中， 不允许内嵌自定义类型，如果有 >>的字段则表示返回包
+4.内建关键字为 number, string, bool 不允许作为 字段name
+5.自定义类型可以内嵌自定义类型
+6.支持--单行注释
+7.协议文件字段为必要字段
+
 ]]
 
-local function parser()
-    local result = {T={},P={}}
-    local _names = {}
+local grammar = {}
+
+local __result
+function grammar.parser()
+    __result = {T={},P={}}
+    local names = {}
     return function(text, path)
         local state = {file = path, pos = 0, line = 1}
         local ldata = lpeg.match(protofile + exception, text, 1, state)
         local pdata = adjust(ldata)
-        link(pdata, result, _names)
-        return result
+        link(pdata, __result, names)
     end
 end
+function grammar.result()
+    return __result
+end
 
-return parser()
+return grammar
 

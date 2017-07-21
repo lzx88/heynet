@@ -13,15 +13,16 @@ local function loopfile(path, fun, ext)
     io.close(f)
 end
 
-function zproto.load(path)
-    local result
-    local parser = require("zproto_grammar")
+function zproto.load(path)    
+    local grammar = require("zproto_grammar")
+    local parse = grammar.parser()
     loopfile(path, function(file)
         local f = assert(io.open(file), "Can't open protocol file:".. file ..".")
         local text = f:read "*a"
         f:close()
-        result = parser(text, file)
+        parse(text, file)
     end)
+    local result = grammar.result()
     core.save(core.create(result))
 end
 
