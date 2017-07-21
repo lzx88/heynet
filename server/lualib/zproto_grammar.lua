@@ -230,7 +230,6 @@ The protocol of zproto
 5.自定义类型可以内嵌自定义类型
 6.支持--单行注释
 7.协议文件字段为必要字段
-
 ]]
 
 local grammar = {}
