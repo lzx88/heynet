@@ -1,3 +1,9 @@
+0 = ping{}
+1 = error{
+	number errno = 1
+}
 
-
-0 = ping 
+5 = signin {
+ 	string name = 1
+	number session = 2
+}
