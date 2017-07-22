@@ -1,5 +1,6 @@
 local skynet = require "skynet"
 local config = require "config"
+local log = require "log"
 local protocol = require "zproto"
 
 skynet.start(function()
@@ -18,7 +19,7 @@ skynet.start(function()
 	local gate_port = tonumber(skynet.getenv "gate_port")
 	skynet.call(hub, "lua", "open", "0.0.0.0", gate_port)
 	
-	skynet.error "Server is already start finish!"
+	log"Server is already start finish!"
 	skynet.exit()
 end)
 

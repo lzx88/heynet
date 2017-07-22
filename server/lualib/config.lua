@@ -1,5 +1,6 @@
 local skynet = require "skynet"
 local share = require "sharedata"
+local log = require "log"
 
 local function check(fname, data)
 	assert(fname ~= "load")
@@ -14,7 +15,7 @@ local function share_config(path)
 	local data = load(content)()
 	check(fname, data)
 	share.new(fname, data)
-	skynet.error("Load config", path)
+	log("Load config %s", path)
 end
 
 local config = {}

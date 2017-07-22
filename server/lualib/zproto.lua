@@ -46,4 +46,3 @@ zproto.encode = core.encode
 zproto.decode_header = core.decode_header
 
 return zproto
-
