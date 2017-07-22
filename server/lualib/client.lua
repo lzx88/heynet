@@ -11,7 +11,7 @@ function client.dispatch(ctx, consumer)
 	local handler = consumer
 	local ok = pcall(proxy.subscribe, fd)
 	if not ok then
-		error("Offline: "..fd)
+		error(E_OFFLINE)
 	end
 	while true do
 		if ctx.exit then
@@ -34,7 +34,8 @@ function client.dispatch(ctx, consumer)
 						name = result
 						result = arg3 or {}
 					elseif t ~= "table" then
-						error ("Invalid response: " .. name)
+						log ("Invalid response: " .. name)
+						--error(E_SRV_STOP)
 					end
 				else
 					log("REQ.%s raise error: %s", name, result)
@@ -46,7 +47,8 @@ function client.dispatch(ctx, consumer)
 			end)
 		else
 			-- unsupported command, disconnected
-			error ("Invalid command: " .. name)
+			log("Invalid command: " .. name)
+			error(E_NO_PROTO)
 		end
 	end
 end
