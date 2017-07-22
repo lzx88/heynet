@@ -1,4 +1,5 @@
 0 = ping{}
+
 1 = error{
 	number errno = 1
 }

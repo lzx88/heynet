@@ -34,12 +34,13 @@ DB 查询 是否存在该用户 返回 在线状态
 然后  在分配的agent上用随机数生成 登录令牌 和 角色id给前端
 向agent 处理 login消息的时候 验证token 以防止 刷登录]] 
 function req:signin(args)
+	dump(args)
 	log("signin rolename = %s", args.name)
 	if self.session then
 		error(E_ILL_OPR)
 	end
 	self.session = args.session
-	return {}
+	return {token = 1}
 	--[[local userid, loginrole = actor.call("db", "user.query", args.session)
 	self.userid = userid
 	self.loginrole = loginrole
@@ -50,6 +51,7 @@ function req:signin(args)
 end
 
 function api.shakehand(fd)
+	log(fd)
 	local ctx = client.dispatch({ fd = fd }, req)
 	return ctx.userid, ctx.token, ctx.loginrole
 end
