@@ -444,7 +444,11 @@ decode(struct zproto_arg* args) {
 	}
 	switch (f->type) {
 	case ZT_INTEGER:// notice: in lua 5.2, 52bit integer support (not 64)
-		lua_pushnumber(L, (lua_Number)*(integer*)args->value);
+		lua_Number n = *(integer*)args->value;
+		if (n & ~0x7fffFFFF)
+			lua_pushnumber(L, n);
+		else
+			lua_pushinteger(L, n);	
 		break;
 	case ZT_BOOL:
 		lua_pushboolean(L, args->value == 0 ? 0 : 1);
