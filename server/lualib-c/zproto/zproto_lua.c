@@ -442,14 +442,15 @@ decode(struct zproto_arg* args) {
 		self->key = args->value;
 		return 0;
 	}
+	integer n;
 	switch (f->type) {
-	case ZT_INTEGER:{// notice: in lua 5.2, 52bit integer support (not 64)
-		integer n = *(integer*)args->value;
+	case ZT_INTEGER:// notice: in lua 5.2, 52bit integer support (not 64)
+		n = *(integer*)args->value;
 		if (n & ~0x7fffFFFF)
 			lua_pushnumber(L, n);
 		else
 			lua_pushinteger(L, n);	
-		}break;
+		break;
 	case ZT_BOOL:
 		lua_pushboolean(L, args->value == 0 ? 0 : 1);
 		break;
