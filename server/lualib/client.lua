@@ -9,7 +9,7 @@ local client = {}
 function client.dispatch(ctx, consumer)
 	local fd = ctx.fd
 	local handler = consumer
-	local ok = pcall(proxy.subscribe(fd))
+	local ok = pcall(proxy.subscribe, fd)
 	if not ok then
 		error("Offline: "..fd)
 	end
