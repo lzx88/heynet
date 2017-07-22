@@ -28,9 +28,13 @@ function client.dispatch(ctx, consumer)
 				if t == "number" then
 					name = "error"
 				elseif ok then
-					if	   t == "nil" 	 then result = {} 
-					elseif t == "string" then name = result, result = arg3 or {}
-					elseif t ~= "table"  then error ("Invalid response: " .. name)
+					if t == "nil" then
+						result = {} 
+					elseif t == "string" then
+						name = result
+						result = arg3 or {}
+					elseif t ~= "table" then
+						error ("Invalid response: " .. name)
 					end
 				else
 					log("REQ.%s raise error: %s", name, result)
