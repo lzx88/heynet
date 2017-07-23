@@ -31,7 +31,7 @@ function manager.assign(fd, userid, token, loginrole)
 				agent = onlines[userid]
 			end
 		end
-	until skynet.call(agent, "lua", "assign", fd, userid, token, loginrole)
+	until actor.call("agent", "assign", fd, userid, token, loginrole)
 	log("Assign %d to %s [%s]", fd, userid, agent)
 end
 

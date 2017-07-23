@@ -9,10 +9,7 @@ local client = {}
 function client.dispatch(ctx, consumer)
 	local fd = ctx.fd
 	local handler = consumer
-	local ok = pcall(proxy.subscribe, fd)
-	if not ok then
-		error(E_OFFLINE)
-	end
+	proxy.subscribe(fd)
 	while true do
 		if ctx.exit then
 			return ctx
@@ -23,23 +20,24 @@ function client.dispatch(ctx, consumer)
 		if f then
 			-- f may block , so fork and run
 			skynet.fork(function()
-				local ok, result, arg3 = pcall(f, ctx, args)
+				local ok, result, pname = pcall(f, ctx, args)
 				local t = type(result)
-				if t == "number" then
-					name = "error"
-				elseif ok then
-					if t == "nil" then
-						result = {} 
-					elseif t == "string" then
-						name = result
-						result = arg3 or {}
-					elseif t ~= "table" then
+				if ok then
+					if t == "number" then
+						name = "error"
+					elseif t == "nil" then
+						result = {}
+					elseif t == "table" then
+						if pname then name = pname end
+					else
 						log ("Invalid response: " .. name)
-						--error(E_SRV_STOP)
+						name = "error"
+						result = E_SERIALIZE
 					end
 				else
-					log("REQ.%s raise error: %s", name, result)
-					reply = nil
+					log("[REQ]%s raise error: %s", name, result)
+					name = "error"
+					if t ~= "number" then result = E_SRV_STOP end					
 				end
 				if reply then
 					proxy.write(fd, reply(name, result))
@@ -47,8 +45,7 @@ function client.dispatch(ctx, consumer)
 			end)
 		else
 			-- unsupported command, disconnected
-			log("Invalid command: " .. name)
-			error(E_NO_PROTO)
+			error("Invalid command: " .. name)
 		end
 	end
 end

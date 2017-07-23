@@ -28,7 +28,7 @@ function req:login()
 end
 
 local function new_user(fd)
-	local ok, err = pcall(client.dispatch , { fd = fd }, req)
+	local ok, err = client.dispatch({fd = fd}, req)
 	log("fd=%d is gone. error = %s", fd, err)
 	client.close(fd)
 	if agent.fd == fd then

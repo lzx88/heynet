@@ -18,7 +18,7 @@ end
 function new_socket(fd, addr)
 	hub.socket[fd] = "[AUTH]"
 	proxy.subscribe(fd)
-	local ok, userid, token, loginrole = auth_socket(fd)
+	local ok, userid, token, loginrole = pcall(auth_socket, fd)
 	if ok then
 		hub.socket[fd] = userid
 		if assign_agent(fd, userid, token, loginrole) then
