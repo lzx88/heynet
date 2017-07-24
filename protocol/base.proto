@@ -1,7 +1,7 @@
 0 = ping{}
 
-1 = error{
-	number errno = 1
+1 = errno{
+	number ok = 1
 }
 
 5 = signin {

@@ -24,20 +24,22 @@ function client.dispatch(ctx, consumer)
 				local t = type(result)
 				if ok then
 					if t == "number" then
-						name = "error"
+						name = "errno"
 					elseif t == "nil" then
 						result = {}
 					elseif t == "table" then
 						if pname then name = pname end
 					else
 						log ("Invalid response: " .. name)
-						name = "error"
+						name = "errno"
 						result = E_SERIALIZE
 					end
 				else
-					log("[REQ]%s raise error: %s", name, result)
-					name = "error"
-					if t ~= "number" then result = E_SRV_STOP end					
+					if t ~= "number" then
+						log("[REQ]%s raise error: %s", name, result)
+						result = E_SRV_STOP
+					end
+					name = "errno"		
 				end
 				if reply then
 					proxy.write(fd, reply(name, result))
