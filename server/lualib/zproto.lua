@@ -23,7 +23,8 @@ function zproto.load(path)
         parse(text, file)
     end)
     local result = grammar.result()
-    core.save(core.create(result))
+    zproto._cobj = core.create(result)
+    core.save(zproto._cobj)
 end
 
 local __cache = setmetatable( {} , { __mode = "v"})
@@ -45,4 +46,11 @@ zproto.decode = core.decode
 zproto.encode = core.encode
 zproto.decode_header = core.decode_header
 
-return zproto
+local mt = {}
+function mt:__gc()
+    if self._cobj then
+        core.delete(self._cobj)
+    end
+end
+
+return setmetatable(zproto, mt)

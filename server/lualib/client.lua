@@ -26,7 +26,7 @@ function client.dispatch(ctx, consumer)
 					if t == "number" then
 						name = "errno"
 					elseif t == "nil" then
-						result = {}
+						result = SUCCESS
 					elseif t == "table" then
 						if pname then name = pname end
 					else
@@ -39,7 +39,7 @@ function client.dispatch(ctx, consumer)
 						log("[REQ]%s raise error: %s", name, result)
 						result = E_SRV_STOP
 					end
-					name = "errno"		
+					name = "errno"
 				end
 				if reply then
 					proxy.write(fd, reply(name, result))

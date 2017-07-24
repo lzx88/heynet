@@ -10,7 +10,7 @@ local function E(n, msg)
 	return n
 end
 
-SUCCESS			= E(0, "成功")
+SUCCESS 		= E(0, "成功")
 E_FORWARD		= E(-1, "重定向")
 E_TIMEOUT		= E(-2, "请求超时")
 E_SERIALIZE		= E(-3, "序列化错误")

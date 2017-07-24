@@ -3,8 +3,9 @@ local socket = require "socket"
 local proxy = require "socket_proxy"
 local log = require "log"
 local actor = require "actor"
+local protocol = require "zproto"
 
-local api = {}
+local API = {}
 local hub = { socket = {} }
 
 local function auth_socket(fd)
@@ -33,7 +34,11 @@ function new_socket(fd, addr)
 	hub.socket[fd] = nil
 end
 
-function api.open(ip, port)
+function API.load_protocol(path)
+	protocol.load(path)
+end
+
+function API.open(ip, port)
 	local n = skynet.getenv("agent_pool_init") or 5
 	actor.call("manager", "create_agent_pool", n)
 
@@ -45,7 +50,7 @@ function api.open(ip, port)
 	socket.start(hub.fd, new_socket)
 end
 
-function api.close()
+function API.close()
 	assert(hub.fd)
 	log("Close %s:%d", hub.ip, hub.port)
 	socket.close(hub.fd)
@@ -54,6 +59,6 @@ function api.close()
 end
 
 actor.run{
-	command = api,
+	command = API,
 	info = hub,
 }
